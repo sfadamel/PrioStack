@@ -1,0 +1,148 @@
+import '../../data/local/drift/app_database.dart';
+import '../models/task_enums.dart';
+
+/// Modèle enrichi d'une tâche avec ses micro-jalons de 30 minutes
+class TaskWithMilestones {
+  final PrioTask task;
+  final List<MicroMilestone> milestones;
+
+  const TaskWithMilestones({
+    required this.task,
+    required this.milestones,
+  });
+
+  double get completionRatio {
+    if (milestones.isEmpty) return task.status == TaskStackStatus.done.dbValue ? 1.0 : 0.0;
+    final doneCount = milestones.where((m) => m.isDone).length;
+    return doneCount / milestones.length;
+  }
+
+  int get completionPercent => (completionRatio * 100).round();
+}
+
+/// Statistiques temps réel pour la barre de statut inférieure
+class StackMetrics {
+  final int deepWorkSeconds;
+  final int interruptionSeconds;
+  final int pushCountToday;
+
+  const StackMetrics({
+    required this.deepWorkSeconds,
+    required this.interruptionSeconds,
+    required this.pushCountToday,
+  });
+
+  int get totalSeconds => deepWorkSeconds + interruptionSeconds;
+
+  double get deepWorkRatio {
+    if (totalSeconds == 0) return 0.70; // Valeur par défaut à l'initialisation
+    return deepWorkSeconds / totalSeconds;
+  }
+
+  int get deepWorkPercent => (deepWorkRatio * 100).round();
+  int get interruptionPercent => 100 - deepWorkPercent;
+}
+
+/// Interface abstraite du Repository consommée par les Notifiers Riverpod.
+/// En V2, une implémentation hybride Supabase + Drift pourra remplacer ou étendre ce contrat.
+abstract class TaskRepository {
+  /// Flux réactif de la Routine du matin (Zone 1)
+  Stream<List<MorningCheckItem>> watchMorningChecks();
+
+  /// Flux réactif de la Pile Active (Zone 2 : Tâche de fond + Urgences empilées au-dessus)
+  Stream<List<TaskWithMilestones>> watchActiveStack();
+
+  /// Flux réactif des files d'attente de Triage & Bouclier Manager (Zone 3)
+  Stream<List<TaskWithMilestones>> watchTriageTasksByType(TaskType type);
+
+  /// Flux réactif des tâches de fond disponibles en backlog (pour démarrer une nouvelle tâche de fond)
+  Stream<List<TaskWithMilestones>> watchBacklogDeepWork();
+
+  /// Flux réactif des métriques de la barre inférieure (% Fond vs % Urgences + compteur PUSH)
+  Stream<StackMetrics> watchStackMetrics();
+
+  /// Capture Éclair (Ctrl + K ou barre supérieure)
+  Future<String> quickCaptureTask({
+    required String title,
+    required TaskType type,
+    String? externalRef,
+    String? requesterOrAssignee,
+    int criticality = 2,
+    VisibilityScope visibility = VisibilityScope.privateScope,
+    List<String> initialMilestones = const [],
+  });
+
+  /// Basculer l'état d'un item de la Morning Check-list
+  Future<void> toggleMorningCheck(String id, bool isChecked);
+
+  /// Réinitialisation quotidienne de la Morning Check-list
+  Future<void> resetMorningChecklist();
+
+  /// Ajouter un item à la Morning Check-list
+  Future<void> addMorningCheckItem(String title, String category);
+
+  /// Supprimer un item de la Morning Check-list (Soft-delete V2-Ready via deletedAt)
+  Future<void> deleteMorningCheckItem(String id);
+
+  /// Définir une tâche de fond comme active à la base de la pile (WIP Limit strict = 1)
+  Future<void> activateDeepWorkTask(String taskId);
+
+  /// Ajouter un micro-jalon de 30 min à une tâche
+  Future<void> addMicroMilestone(String taskId, String title, {int durationMinutes = 30});
+
+  /// Cocher / décocher un micro-jalon de 30 min
+  Future<void> toggleMicroMilestone(String milestoneId, bool isDone);
+
+  /// Supprimer un micro-jalon de 30 min
+  Future<void> deleteMicroMilestone(String milestoneId);
+
+  /// Supprimer une tâche (Soft-delete V2-Ready via deletedAt)
+  Future<void> deleteTask(String taskId);
+
+  /// Incrémenter le temps passé sur la tâche active (Chronomètre Focus)
+  Future<void> recordFocusTick(String taskId, int deltaSeconds);
+
+  /// 🚨 MÉCANIQUE PUSH :
+  /// 1. Sauvegarde la "Note de reprise" obligatoire sur la tâche interrompue
+  /// 2. Met la tâche de fond en statut 'pushed_pause'
+  /// 3. Place l'urgence (existante ou nouvellement créée) au sommet de la pile ('active_top')
+  /// 4. Incrémente le compteur d'interruptions (stackDepth / pushCount)
+  Future<void> pushInterruption({
+    required String resumeNote,
+    String? existingUrgencyTaskId,
+    String? newUrgencyTitle,
+    String? externalRef,
+    int criticality = 3,
+  });
+
+  /// ✅ MÉCANIQUE POP :
+  /// 1. Clôt l'urgence au sommet de la pile ('done')
+  /// 2. Restaure l'élément immédiatement inférieur (ou la tâche de fond) à l'état actif
+  /// 3. Conserve la Note de reprise bien en évidence pour reprendre sans perte de contexte
+  Future<void> popActiveTopTask(String topTaskId);
+
+  /// Effacer la note de reprise une fois que l'utilisateur a repris son flux mental
+  Future<void> acknowledgeResumeNote(String taskId);
+
+  /// Flux réactif des tâches terminées (Historique / Backlog des éléments déjà faits)
+  Stream<List<TaskWithMilestones>> watchCompletedTasks();
+
+  /// Déléguer une urgence ou une tâche à un membre de l'équipe (bascule dans l'onglet Délégué)
+  Future<void> delegateTask(String taskId, String assigneeName);
+
+  /// Marquer une tâche (Fond, Triage, Assistance ou Délégué) comme résolue ('done')
+  Future<void> completeTask(String taskId);
+
+  /// Rendre de nouveau active une tâche déjà terminée ('done' -> 'backlog' ou directement dans la Pile Active)
+  Future<void> reactivateTask(String taskId, {bool placeInActiveStack = false});
+
+  /// Réordonner par glisser-déposer les éléments de la Morning Check-list
+  Future<void> reorderMorningChecks(List<String> orderedIds);
+
+  /// Réordonner par glisser-déposer les micro-jalons de 30 minutes d'une tâche
+  Future<void> reorderMicroMilestones(String taskId, List<String> orderedMilestoneIds);
+
+  /// Réordonner par glisser-déposer une liste de tâches (Files de Triage, Réserve Fond, etc.)
+  Future<void> reorderTasks(List<String> orderedTaskIds);
+}
+
