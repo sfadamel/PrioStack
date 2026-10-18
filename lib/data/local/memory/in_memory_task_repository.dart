@@ -5,10 +5,11 @@ import '../../../domain/models/task_enums.dart';
 import '../../../domain/repositories/task_repository.dart';
 import '../drift/app_database.dart';
 
-/// Implémentation réactive en mémoire du contrat TaskRepository.
-/// Permet d'exécuter et tester immédiatement PrioStack dans Chrome/Edge (`flutter run -d chrome`)
-/// sans nécessiter la chaîne de compilation C++ Visual Studio, tout en partageant exactement
-/// le même contrat et le même jeu de données initial que DriftTaskRepository.
+import 'web_storage_helper.dart';
+
+/// Implémentation réactive en mémoire du contrat TaskRepository avec persistance localStorage pour le Web / PWA.
+/// Permet d'exécuter PrioStack dans n'importe quel navigateur (Edge, Chrome, Citrix) avec persistance
+/// locale intégrale sans serveur backend ni exécutable non signé.
 class InMemoryTaskRepository implements TaskRepository {
   final Uuid _uuid = const Uuid();
   final List<PrioTask> _tasks = [];
@@ -19,7 +20,33 @@ class InMemoryTaskRepository implements TaskRepository {
   final _changeController = StreamController<void>.broadcast();
 
   InMemoryTaskRepository() {
-    _seedInitialData();
+    _loadOrSeedData();
+  }
+
+  void _loadOrSeedData() {
+    final savedTasks = WebStorageHelper.loadTasks();
+    final savedMilestones = WebStorageHelper.loadMilestones();
+    final savedChecks = WebStorageHelper.loadMorningChecks();
+    final savedEvents = WebStorageHelper.loadCalendarEvents();
+
+    if (savedTasks != null && savedTasks.isNotEmpty) {
+      _tasks.addAll(savedTasks);
+      if (savedMilestones != null) _milestones.addAll(savedMilestones);
+      if (savedChecks != null) _morningChecks.addAll(savedChecks);
+      if (savedEvents != null) _calendarEvents.addAll(savedEvents);
+    } else {
+      _seedInitialData();
+      _saveToLocalStorage();
+    }
+  }
+
+  void _saveToLocalStorage() {
+    WebStorageHelper.saveAll(
+      tasks: _tasks,
+      milestones: _milestones,
+      morningChecks: _morningChecks,
+      calendarEvents: _calendarEvents,
+    );
   }
 
   Stream<T> _reactiveStream<T>(T Function() compute) async* {
@@ -30,6 +57,7 @@ class InMemoryTaskRepository implements TaskRepository {
   }
 
   void _notify() {
+    _saveToLocalStorage();
     if (!_changeController.isClosed) {
       _changeController.add(null);
     }

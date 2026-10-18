@@ -1,12 +1,12 @@
 {
-    "name": "priostack",
-    "short_name": "priostack",
+    "name": "PrioStack — Cockpit & Agenda",
+    "short_name": "PrioStack",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#0B0C10",
+    "theme_color": "#3B82F6",
+    "description": "Cockpit de gestion de la charge mentale, Pile Active (PUSH/POP) et Calendrier pour Architectes & Managers.",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {
