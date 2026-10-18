@@ -6,8 +6,54 @@ import '../../core/theme/app_theme.dart';
 import '../../data/local/drift/app_database.dart';
 import '../../data/local/drift/drift_task_repository.dart';
 import '../../data/local/memory/in_memory_task_repository.dart';
+import '../../domain/models/calendar_event.dart';
 import '../../domain/models/task_enums.dart';
 import '../../domain/repositories/task_repository.dart';
+
+/// Vue principale affichée sur l'écran (Cockpit 3 colonnes vs Calendrier & Agenda complet)
+enum CockpitMainView {
+  cockpit,
+  calendar,
+}
+
+/// Notifier pour basculer entre la vue Cockpit PrioStack et la vue Calendrier & Agenda
+class CockpitMainViewNotifier extends Notifier<CockpitMainView> {
+  @override
+  CockpitMainView build() => CockpitMainView.cockpit;
+
+  void toggleView() {
+    state = state == CockpitMainView.cockpit
+        ? CockpitMainView.calendar
+        : CockpitMainView.cockpit;
+  }
+
+  void setView(CockpitMainView view) {
+    state = view;
+  }
+}
+
+final cockpitMainViewProvider =
+    NotifierProvider<CockpitMainViewNotifier, CockpitMainView>(
+  CockpitMainViewNotifier.new,
+);
+
+/// Date sélectionnée dans le Calendrier (par défaut : Aujourd'hui)
+class SelectedCalendarDateNotifier extends Notifier<DateTime> {
+  @override
+  DateTime build() {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day);
+  }
+
+  void selectDate(DateTime date) {
+    state = DateTime(date.year, date.month, date.day);
+  }
+}
+
+final selectedCalendarDateProvider =
+    NotifierProvider<SelectedCalendarDateNotifier, DateTime>(
+  SelectedCalendarDateNotifier.new,
+);
 
 /// Instance singleton de la base SQLite locale Drift (Windows / Android / iOS)
 final appDatabaseProvider = Provider<AppDatabase>((ref) {
@@ -30,6 +76,11 @@ final taskRepositoryProvider = Provider<TaskRepository>((ref) {
 /// Flux réactif Zone 1 : Morning Check-list
 final morningChecksProvider = StreamProvider<List<MorningCheckItem>>((ref) {
   return ref.watch(taskRepositoryProvider).watchMorningChecks();
+});
+
+/// Flux réactif du Calendrier & Agenda (Réunions, Points Équipe, Créneaux Architecture, Échéances)
+final calendarEventsProvider = StreamProvider<List<CalendarEventItem>>((ref) {
+  return ref.watch(taskRepositoryProvider).watchCalendarEvents();
 });
 
 /// Flux réactif Zone 2 : La Pile Active (Call Stack : Sommet -> Base)

@@ -1,4 +1,5 @@
 import '../../data/local/drift/app_database.dart';
+import '../models/calendar_event.dart';
 import '../models/task_enums.dart';
 
 /// Modèle enrichi d'une tâche avec ses micro-jalons de 30 minutes
@@ -144,5 +145,43 @@ abstract class TaskRepository {
 
   /// Réordonner par glisser-déposer une liste de tâches (Files de Triage, Réserve Fond, etc.)
   Future<void> reorderTasks(List<String> orderedTaskIds);
+
+  // --- CALENDRIER & AGENDA (Réunions, Points Équipe, Créneaux Architecture, Échéances) ---
+
+  /// Flux réactif des événements du calendrier triés par heure de début
+  Stream<List<CalendarEventItem>> watchCalendarEvents();
+
+  /// Planifier un nouvel événement / réunion dans le calendrier
+  Future<String> addCalendarEvent({
+    required String title,
+    required CalendarEventCategory category,
+    required DateTime startTime,
+    required DateTime endTime,
+    String? participantsOrLocation,
+    String? externalRef,
+    String? notes,
+  });
+
+  /// Mettre à jour un événement du calendrier
+  Future<void> updateCalendarEvent(CalendarEventItem event);
+
+  /// Basculer l'état terminé / honoré d'un événement du calendrier
+  Future<void> toggleCalendarEventCompleted(String eventId, bool isCompleted);
+
+  /// Supprimer un événement du calendrier (Soft-delete V2-Ready via deletedAt)
+  Future<void> deleteCalendarEvent(String eventId);
+
+  /// 🚨 PUSH Réunion dans la Pile Active :
+  /// Met en pause la Tâche de Fond en cours avec Note de reprise obligatoire et place la réunion au sommet de la pile
+  Future<void> pushCalendarEventToStack({
+    required String eventId,
+    required String resumeNote,
+  });
+
+  /// Clôture automatiquement toutes les réunions / événements dont l'heure de fin est dépassée
+  /// et retourne la liste des événements qui viennent d'être marqués comme terminés.
+  Future<List<CalendarEventItem>> autoCompletePastCalendarEvents([
+    DateTime? nowOverride,
+  ]);
 }
 

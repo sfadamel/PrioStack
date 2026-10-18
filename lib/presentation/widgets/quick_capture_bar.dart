@@ -2,9 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
 import '../../domain/models/task_enums.dart';
+import '../providers/notification_provider.dart';
 import '../providers/priostack_providers.dart';
+import 'notification_center_widgets.dart';
 
-/// Barre de Capture Éclair toujours accessible en haut + invocable par Ctrl + K
+/// Barre supérieure minimaliste (Style Linear / Raycast) :
+/// - Gauche : Marque PrioStack + Commutateur segmenté (Cockpit | Calendrier)
+/// - Centre : Command Bar épurée (Ctrl + K) avec dévoilement progressif des options au focus
+/// - Droite : Icônes épurées (Notifications 🔔 + Thème 🌙/☀️)
 class QuickCaptureBar extends ConsumerStatefulWidget {
   final FocusNode? searchFocusNode;
   const QuickCaptureBar({super.key, this.searchFocusNode});
@@ -17,11 +22,39 @@ class _QuickCaptureBarState extends ConsumerState<QuickCaptureBar> {
   final _titleController = TextEditingController();
   final _externalRefController = TextEditingController();
   final _personController = TextEditingController();
+  late FocusNode _internalFocusNode;
   TaskType _selectedType = TaskType.urgence;
   bool _isTeamVisible = false;
+  bool _isExpanded = false;
+
+  FocusNode get _effectiveFocusNode =>
+      widget.searchFocusNode ?? _internalFocusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _internalFocusNode = FocusNode();
+    _effectiveFocusNode.addListener(_handleFocusChange);
+    _titleController.addListener(_handleTextChange);
+  }
+
+  void _handleFocusChange() {
+    if (_effectiveFocusNode.hasFocus && !_isExpanded) {
+      setState(() => _isExpanded = true);
+    }
+  }
+
+  void _handleTextChange() {
+    if (_titleController.text.isNotEmpty && !_isExpanded) {
+      setState(() => _isExpanded = true);
+    }
+  }
 
   @override
   void dispose() {
+    _effectiveFocusNode.removeListener(_handleFocusChange);
+    _titleController.removeListener(_handleTextChange);
+    _internalFocusNode.dispose();
     _titleController.dispose();
     _externalRefController.dispose();
     _personController.dispose();
@@ -38,275 +71,416 @@ class _QuickCaptureBarState extends ConsumerState<QuickCaptureBar> {
           externalRef: _externalRefController.text.trim(),
           requesterOrAssignee: _personController.text.trim(),
           criticality: _selectedType == TaskType.urgence ? 3 : 2,
-          visibility:
-              _isTeamVisible ? VisibilityScope.team : VisibilityScope.privateScope,
+          visibility: _isTeamVisible
+              ? VisibilityScope.team
+              : VisibilityScope.privateScope,
+        );
+
+    ref.read(appNotificationsProvider.notifier).pushNotification(
+          title: 'Capturé dans ${_selectedType.label}',
+          body: title,
+          type: AppNotificationType.taskCaptured,
+          showBanner: false,
         );
 
     _titleController.clear();
     _externalRefController.clear();
     _personController.clear();
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: AppTheme.surfaceElevated,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: _selectedType.accentColor.withValues(alpha: 0.6)),
-          ),
-          content: Row(
-            children: [
-              Icon(Icons.bolt_rounded, color: _selectedType.accentColor, size: 18),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Capturé dans [${_selectedType.label}] : "$title"',
-                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
-                ),
-              ),
-            ],
-          ),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
+    setState(() => _isExpanded = false);
+    _effectiveFocusNode.unfocus();
   }
 
   @override
   Widget build(BuildContext context) {
-    final isCompact = MediaQuery.of(context).size.width < 920;
+    ref.watch(themeModeProvider);
+    final currentView = ref.watch(cockpitMainViewProvider);
+    final eventsAsync = ref.watch(calendarEventsProvider);
+    final now = DateTime.now();
+
+    final todayRemainingCount = eventsAsync.maybeWhen(
+      data: (list) =>
+          list.where((e) => e.isSameDay(now) && !e.isCompleted).length,
+      orElse: () => 0,
+    );
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: AppTheme.neumorphicCard(
+      margin: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
         color: AppTheme.surfaceCard,
-        radius: 18,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.borderSubtle),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
-              // Badge PrioStack + Raccourci Ctrl+K
+              // 1. Marque PrioStack épurée
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      gradient: AppTheme.primaryGradient,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.layers_rounded,
+                      size: 15,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 9),
+                  Text(
+                    'PrioStack',
+                    style: TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 16),
+
+              // 2. Commutateur de vue segmenté (Cockpit | Calendrier)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.all(3),
                 decoration: BoxDecoration(
-                  gradient: AppTheme.primaryGradient,
+                  color: AppTheme.bgDeep,
                   borderRadius: BorderRadius.circular(10),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.accentBlue.withValues(alpha: 0.35),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
+                  border: Border.all(color: AppTheme.borderSubtle),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildViewSegment(
+                      label: 'Cockpit',
+                      icon: Icons.dashboard_customize_outlined,
+                      isActive: currentView == CockpitMainView.cockpit,
+                      onTap: () => ref
+                          .read(cockpitMainViewProvider.notifier)
+                          .setView(CockpitMainView.cockpit),
+                    ),
+                    const SizedBox(width: 2),
+                    _buildViewSegment(
+                      label: 'Calendrier',
+                      icon: Icons.calendar_today_rounded,
+                      badgeCount: todayRemainingCount,
+                      isActive: currentView == CockpitMainView.calendar,
+                      onTap: () => ref
+                          .read(cockpitMainViewProvider.notifier)
+                          .setView(CockpitMainView.calendar),
                     ),
                   ],
                 ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.layers_rounded, size: 16, color: Colors.white),
-                    SizedBox(width: 6),
-                    Text(
-                      'PrioStack',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                      ),
+              ),
+              const SizedBox(width: 16),
+
+              // 3. Command Bar Centrale (Style Raycast / Linear)
+              Expanded(
+                child: Container(
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: AppTheme.bgDeep,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: _isExpanded
+                          ? _selectedType.accentColor.withValues(alpha: 0.65)
+                          : AppTheme.borderSubtle,
                     ),
-                  ],
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Row(
+                    children: [
+                      // Pastille de type cliquable (cycle rapide ou ouvre le tiroir)
+                      InkWell(
+                        borderRadius: BorderRadius.circular(6),
+                        onTap: () => setState(() => _isExpanded = !_isExpanded),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: _selectedType.accentColor
+                                .withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: _selectedType.accentColor,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                _shortTypeLabel(_selectedType),
+                                style: TextStyle(
+                                  color: _selectedType.accentColor,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(width: 2),
+                              Icon(
+                                _isExpanded
+                                    ? Icons.keyboard_arrow_up_rounded
+                                    : Icons.keyboard_arrow_down_rounded,
+                                size: 13,
+                                color: _selectedType.accentColor,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: _titleController,
+                          focusNode: _effectiveFocusNode,
+                          onTap: () {
+                            if (!_isExpanded) {
+                              setState(() => _isExpanded = true);
+                            }
+                          },
+                          onSubmitted: (_) => _submitQuickCapture(),
+                          style: TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontSize: 12.5,
+                          ),
+                          decoration: InputDecoration(
+                            hintText:
+                                'Capture éclair : saisir une tâche, urgence ou assistance...',
+                            hintStyle: TextStyle(
+                              color: AppTheme.textMuted,
+                              fontSize: 12,
+                            ),
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ),
+                      if (_isExpanded)
+                        InkWell(
+                          onTap: () {
+                            _titleController.clear();
+                            _effectiveFocusNode.unfocus();
+                            setState(() => _isExpanded = false);
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: Icon(
+                              Icons.close_rounded,
+                              size: 15,
+                              color: AppTheme.textMuted,
+                            ),
+                          ),
+                        )
+                      else
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppTheme.surfaceCard,
+                            borderRadius: BorderRadius.circular(5),
+                            border: Border.all(color: AppTheme.borderSubtle),
+                          ),
+                          child: Text(
+                            'Ctrl K',
+                            style: TextStyle(
+                              color: AppTheme.textMuted,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
 
-              // Sélecteur de Type (Pills neumorphiques)
-              if (!isCompact) ...[
-                _buildTypeSelectorRow(),
-                const SizedBox(width: 12),
-              ],
-
-              // Champ principal de capture éclair
-              Expanded(
-                child: Container(
-                  height: 38,
-                  decoration: AppTheme.neumorphicInset(radius: 11),
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.flash_on_rounded,
-                        size: 16,
-                        color: _selectedType.accentColor,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextField(
-                          controller: _titleController,
-                          focusNode: widget.searchFocusNode,
-                          onSubmitted: (_) => _submitQuickCapture(),
-                          style: TextStyle(
-                            color: AppTheme.textPrimary,
-                            fontSize: 13,
-                          ),
-                          decoration: InputDecoration(
-                            hintText: _hintForType(_selectedType),
-                            hintStyle: TextStyle(
-                              color: AppTheme.textMuted,
-                              fontSize: 12.5,
-                            ),
-                            border: InputBorder.none,
-                            isDense: true,
-                          ),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppTheme.surfaceElevated,
-                          borderRadius: BorderRadius.circular(5),
-                          border: Border.all(color: AppTheme.borderHighlight),
-                        ),
-                        child: Text(
-                          'Ctrl + K',
-                          style: TextStyle(
-                            color: AppTheme.textSecondary,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-
-              // Champ Dev / Interlocuteur (optionnel)
-              if (!isCompact) ...[
-                SizedBox(
-                  width: 135,
-                  height: 38,
-                  child: Container(
-                    decoration: AppTheme.neumorphicInset(radius: 11),
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: TextField(
-                      controller: _personController,
-                      onSubmitted: (_) => _submitQuickCapture(),
-                      style: TextStyle(color: AppTheme.textPrimary, fontSize: 12),
-                      decoration: InputDecoration(
-                        hintText: _selectedType == TaskType.devBlock
-                            ? 'Demandeur (ex: Lucas)'
-                            : 'Responsable / Source',
-                        hintStyle: TextStyle(color: AppTheme.textMuted, fontSize: 11.5),
-                        border: InputBorder.none,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
-
-              // Champ externalRef (Ticket Azure DevOps)
-              SizedBox(
-                width: isCompact ? 95 : 120,
-                height: 38,
-                child: Container(
-                  decoration: AppTheme.neumorphicInset(radius: 11),
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  child: TextField(
-                    controller: _externalRefController,
-                    onSubmitted: (_) => _submitQuickCapture(),
-                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 12),
-                    decoration: InputDecoration(
-                      hintText: 'AzDO AB#...',
-                      hintStyle: TextStyle(color: AppTheme.textMuted, fontSize: 11.5),
-                      border: InputBorder.none,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-
-              // Toggle Visibilité V2-Ready (Private / Team)
-              Tooltip(
-                message: _isTeamVisible
-                    ? 'Visibilité V2 : Équipe (Team Sync)'
-                    : 'Visibilité V2 : Privé (Local)',
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(10),
-                  onTap: () => setState(() => _isTeamVisible = !_isTeamVisible),
-                  child: Container(
-                    height: 38,
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    decoration: BoxDecoration(
-                      color: _isTeamVisible
-                          ? AppTheme.accentIndigo.withValues(alpha: 0.2)
-                          : AppTheme.surfaceElevated,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: _isTeamVisible
-                            ? AppTheme.accentIndigo
-                            : AppTheme.borderSubtle,
-                      ),
-                    ),
-                    child: Icon(
-                      _isTeamVisible ? Icons.groups_rounded : Icons.lock_outline_rounded,
-                      size: 16,
-                      color: _isTeamVisible ? AppTheme.accentBlue : AppTheme.textSecondary,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-
-              // Bouton d'ajout rapide
-              InkWell(
-                borderRadius: BorderRadius.circular(11),
-                onTap: _submitQuickCapture,
-                child: Container(
-                  height: 38,
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  decoration: BoxDecoration(
-                    gradient: AppTheme.primaryGradient,
-                    borderRadius: BorderRadius.circular(11),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.accentBlue.withValues(alpha: 0.35),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  alignment: Alignment.center,
-                  child: const Row(
-                    children: [
-                      Icon(Icons.add_rounded, size: 17, color: Colors.white),
-                      SizedBox(width: 4),
-                      Text(
-                        'Capturer',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-
-              // Bouton de bascule Mode Sombre / Mode Clair
-              _buildThemeToggleButton(),
+              // 4. Actions globales épurées (Notifications 🔔 + Thème 🌙/☀️)
+              const NotificationBellButton(),
+              const SizedBox(width: 6),
+              _buildMinimalThemeButton(),
             ],
           ),
-          if (isCompact) ...[
+
+          // Tiroir contextuel de Capture Éclair (visible uniquement pendant la saisie)
+          if (_isExpanded) ...[
             const SizedBox(height: 8),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: _buildTypeSelectorRow(),
+            Container(
+              padding: const EdgeInsets.only(top: 6),
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(
+                    color: AppTheme.borderSubtle.withValues(alpha: 0.6),
+                  ),
+                ),
+              ),
+              child: Row(
+                children: [
+                  // Choix du flux
+                  ...TaskType.values.map((type) {
+                    final isSel = _selectedType == type;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () => setState(() => _selectedType = type),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 9, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isSel
+                                ? type.accentColor.withValues(alpha: 0.16)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: isSel
+                                  ? type.accentColor.withValues(alpha: 0.7)
+                                  : AppTheme.borderSubtle,
+                            ),
+                          ),
+                          child: Text(
+                            type.label,
+                            style: TextStyle(
+                              color: isSel
+                                  ? AppTheme.textPrimary
+                                  : AppTheme.textSecondary,
+                              fontSize: 11,
+                              fontWeight:
+                                  isSel ? FontWeight.w700 : FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                  const Spacer(),
+                  // Champ Interlocuteur compact
+                  SizedBox(
+                    width: 140,
+                    height: 28,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.bgDeep,
+                        borderRadius: BorderRadius.circular(7),
+                        border: Border.all(color: AppTheme.borderSubtle),
+                      ),
+                      child: TextField(
+                        controller: _personController,
+                        onSubmitted: (_) => _submitQuickCapture(),
+                        style: TextStyle(
+                            color: AppTheme.textPrimary, fontSize: 11.5),
+                        decoration: InputDecoration(
+                          hintText: ' Interlocuteur / Dev',
+                          hintStyle: TextStyle(
+                              color: AppTheme.textMuted, fontSize: 11),
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding:
+                              const EdgeInsets.symmetric(vertical: 6),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  // Champ Ticket AzDO compact
+                  SizedBox(
+                    width: 95,
+                    height: 28,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.bgDeep,
+                        borderRadius: BorderRadius.circular(7),
+                        border: Border.all(color: AppTheme.borderSubtle),
+                      ),
+                      child: TextField(
+                        controller: _externalRefController,
+                        onSubmitted: (_) => _submitQuickCapture(),
+                        style: TextStyle(
+                            color: AppTheme.textPrimary, fontSize: 11.5),
+                        decoration: InputDecoration(
+                          hintText: 'AB#...',
+                          hintStyle: TextStyle(
+                              color: AppTheme.textMuted, fontSize: 11),
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding:
+                              const EdgeInsets.symmetric(vertical: 6),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  // Visibilité Privé / Équipe
+                  InkWell(
+                    borderRadius: BorderRadius.circular(7),
+                    onTap: () =>
+                        setState(() => _isTeamVisible = !_isTeamVisible),
+                    child: Container(
+                      height: 28,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: _isTeamVisible
+                            ? AppTheme.accentIndigo.withValues(alpha: 0.18)
+                            : AppTheme.bgDeep,
+                        borderRadius: BorderRadius.circular(7),
+                        border: Border.all(
+                          color: _isTeamVisible
+                              ? AppTheme.accentIndigo
+                              : AppTheme.borderSubtle,
+                        ),
+                      ),
+                      child: Icon(
+                        _isTeamVisible
+                            ? Icons.groups_rounded
+                            : Icons.lock_outline_rounded,
+                        size: 14,
+                        color: _isTeamVisible
+                            ? AppTheme.accentBlue
+                            : AppTheme.textSecondary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Bouton Valider
+                  InkWell(
+                    borderRadius: BorderRadius.circular(7),
+                    onTap: _submitQuickCapture,
+                    child: Container(
+                      height: 28,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.accentBlue,
+                        borderRadius: BorderRadius.circular(7),
+                      ),
+                      alignment: Alignment.center,
+                      child: const Text(
+                        'Ajouter ↵',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ],
@@ -314,99 +488,99 @@ class _QuickCaptureBarState extends ConsumerState<QuickCaptureBar> {
     );
   }
 
-  Widget _buildTypeSelectorRow() {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: TaskType.values.map((type) {
-        final isSelected = _selectedType == type;
-        return Padding(
-          padding: const EdgeInsets.only(right: 6),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(10),
-            onTap: () => setState(() => _selectedType = type),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? type.accentColor.withValues(alpha: 0.18)
-                    : AppTheme.surfaceInput,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: isSelected
-                      ? type.accentColor.withValues(alpha: 0.85)
-                      : AppTheme.borderSubtle,
-                  width: isSelected ? 1.2 : 1.0,
-                ),
-              ),
-              child: Text(
-                type.label,
-                style: TextStyle(
-                  color: isSelected ? AppTheme.textPrimary : AppTheme.textSecondary,
-                  fontSize: 11.5,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                ),
+  Widget _buildViewSegment({
+    required String label,
+    required IconData icon,
+    required bool isActive,
+    required VoidCallback onTap,
+    int badgeCount = 0,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isActive ? AppTheme.surfaceElevated : Colors.transparent,
+          borderRadius: BorderRadius.circular(7),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 13.5,
+              color: isActive ? AppTheme.accentBlue : AppTheme.textSecondary,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: isActive ? AppTheme.textPrimary : AppTheme.textSecondary,
+                fontSize: 12,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
               ),
             ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildThemeToggleButton() {
-    final themeMode = ref.watch(themeModeProvider);
-    final isDark = themeMode == ThemeMode.dark;
-
-    return Tooltip(
-      message: isDark
-          ? 'Passer en Mode Clair (Light Soft UI)'
-          : 'Passer en Mode Sombre (Dark Neumorphism)',
-      child: InkWell(
-        borderRadius: BorderRadius.circular(11),
-        onTap: () => ref.read(themeModeProvider.notifier).toggleTheme(),
-        child: Container(
-          height: 38,
-          padding: const EdgeInsets.symmetric(horizontal: 11),
-          decoration: BoxDecoration(
-            color: AppTheme.surfaceElevated,
-            borderRadius: BorderRadius.circular(11),
-            border: Border.all(color: AppTheme.borderHighlight),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
-                size: 16,
-                color: isDark ? AppTheme.neonAmber : AppTheme.accentBlue,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                isDark ? 'Sombre' : 'Clair',
-                style: TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
+            if (badgeCount > 0) ...[
+              const SizedBox(width: 5),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: AppTheme.accentBlue.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: Text(
+                  '$badgeCount',
+                  style: const TextStyle(
+                    color: AppTheme.accentBlue,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ],
-          ),
+          ],
         ),
       ),
     );
   }
 
-  String _hintForType(TaskType type) {
+  Widget _buildMinimalThemeButton() {
+    final themeMode = ref.watch(themeModeProvider);
+    final isDark = themeMode == ThemeMode.dark;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => ref.read(themeModeProvider.notifier).toggleTheme(),
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: AppTheme.bgDeep,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppTheme.borderSubtle),
+        ),
+        child: Icon(
+          isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+          size: 16,
+          color: isDark ? AppTheme.neonAmber : AppTheme.accentBlue,
+        ),
+      ),
+    );
+  }
+
+  String _shortTypeLabel(TaskType type) {
     switch (type) {
       case TaskType.urgence:
-        return 'Capturer une urgence critique en 2s (Entrée)...';
+        return 'Urgence';
       case TaskType.devBlock:
-        return 'Noter une demande d\'assistance...';
+        return 'Assistance';
       case TaskType.deepWork:
-        return 'Ajouter une tâche de fond (Architecture, Conception)...';
+        return 'Fond';
       case TaskType.delegated:
-        return 'Noter un point délégué / en attente de retour...';
+        return 'Délégué';
     }
   }
 }

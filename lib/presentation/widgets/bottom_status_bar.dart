@@ -3,9 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
 import '../providers/priostack_providers.dart';
 
-/// Barre de Statut Inférieure :
-/// Jauge visuelle temps réel (% Temps Tâches de Fond vs % Temps Urgences / Support Devs)
-/// + Compteur d'interruptions (PUSH).
+/// Barre de Statut Inférieure ultra-fine (style IDE / Linear) :
+/// Jauge visuelle temps réel (% Temps Tâches de Fond vs % Temps Urgences) + Compteur PUSH.
 class BottomStatusBar extends ConsumerWidget {
   const BottomStatusBar({super.key});
 
@@ -15,123 +14,109 @@ class BottomStatusBar extends ConsumerWidget {
     final metricsAsync = ref.watch(stackMetricsProvider);
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 6, 16, 12),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-      decoration: AppTheme.neumorphicCard(
-        color: AppTheme.surfaceCard,
-        radius: 16,
+      height: 32,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      decoration: BoxDecoration(
+        color: AppTheme.bgMain,
+        border: Border(
+          top: BorderSide(color: AppTheme.borderSubtle),
+        ),
       ),
       child: metricsAsync.when(
         data: (metrics) {
           return Row(
             children: [
               // Légende Tâches de Fond
-              Row(
-                children: [
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: const BoxDecoration(
-                      color: AppTheme.accentBlue,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Tâches de Fond : ${metrics.deepWorkPercent}%',
-                    style: TextStyle(
-                      color: AppTheme.textPrimary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
+              Container(
+                width: 7,
+                height: 7,
+                decoration: const BoxDecoration(
+                  color: AppTheme.accentBlue,
+                  shape: BoxShape.circle,
+                ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 6),
+              Text(
+                'Focus Fond ${metrics.deepWorkPercent}%',
+                style: TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(width: 12),
 
-              // Jauge visuelle bi-colore temps réel
-              Expanded(
+              // Fine barre de progression bi-colore (4px)
+              SizedBox(
+                width: 140,
+                height: 4,
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: SizedBox(
-                    height: 10,
-                    child: Row(
-                      children: [
-                        Expanded(
-                          flex: metrics.deepWorkPercent.clamp(5, 95),
-                          child: Container(
-                            decoration: const BoxDecoration(
-                              gradient: AppTheme.primaryGradient,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          flex: metrics.interruptionPercent.clamp(5, 95),
-                          child: Container(
-                            decoration: const BoxDecoration(
-                              gradient: AppTheme.urgencyGradient,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                  borderRadius: BorderRadius.circular(4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: metrics.deepWorkPercent.clamp(5, 95),
+                        child: Container(color: AppTheme.accentBlue),
+                      ),
+                      Expanded(
+                        flex: metrics.interruptionPercent.clamp(5, 95),
+                        child: Container(color: AppTheme.neonPink),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
 
-              // Légende Urgences & Support Devs
+              // Légende Urgences & Assistance
+              Container(
+                width: 7,
+                height: 7,
+                decoration: const BoxDecoration(
+                  color: AppTheme.neonPink,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Sollicitations ${metrics.interruptionPercent}%',
+                style: TextStyle(
+                  color: AppTheme.textMuted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const Spacer(),
+
+              // Indicateur d'état local + Compteur PUSH
+              Text(
+                'SQLite Local • Sync-Ready',
+                style: TextStyle(
+                  color: AppTheme.textMuted,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(width: 14),
               Row(
                 children: [
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: const BoxDecoration(
-                      color: AppTheme.neonPink,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
+                  const Icon(Icons.bolt_rounded,
+                      size: 13, color: AppTheme.neonPink),
+                  const SizedBox(width: 3),
                   Text(
-                    'Urgences / Assistance : ${metrics.interruptionPercent}%',
+                    '${metrics.pushCountToday} PUSH aujourd\'hui',
                     style: TextStyle(
                       color: AppTheme.textSecondary,
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(width: 18),
-
-              // Compteur d'interruptions (PUSH)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceElevated,
-                  borderRadius: BorderRadius.circular(9),
-                  border: Border.all(color: AppTheme.neonPink.withValues(alpha: 0.45)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.bolt_rounded,
-                        size: 14, color: AppTheme.neonPink),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Interruptions (PUSH) : ${metrics.pushCountToday}',
-                      style: TextStyle(
-                        color: AppTheme.textPrimary,
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ],
           );
         },
-        loading: () => const SizedBox(height: 24),
+        loading: () => const SizedBox.shrink(),
         error: (_, __) => const SizedBox.shrink(),
       ),
     );

@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
+import '../../../domain/models/calendar_event.dart';
 import '../../../domain/models/task_enums.dart';
 import '../../../domain/repositories/task_repository.dart';
 import 'app_database.dart';
@@ -7,6 +9,8 @@ import 'app_database.dart';
 class DriftTaskRepository implements TaskRepository {
   final AppDatabase _db;
   final Uuid _uuid = const Uuid();
+  final _calendarChangeController = StreamController<void>.broadcast();
+  bool _calendarTableInitialized = false;
 
   DriftTaskRepository(this._db);
 
@@ -652,6 +656,385 @@ class DriftTaskRepository implements TaskRepository {
         );
       }
     });
+  }
+
+  // --- CALENDRIER & AGENDA (Persistance SQLite V2-Ready) ---
+
+  Future<void> _ensureCalendarTableAndSeed() async {
+    if (_calendarTableInitialized) return;
+    await _db.customStatement('''
+      CREATE TABLE IF NOT EXISTS calendar_events (
+        id TEXT PRIMARY KEY NOT NULL,
+        user_id TEXT NOT NULL,
+        workspace_id TEXT NOT NULL,
+        visibility TEXT NOT NULL DEFAULT 'team',
+        sync_status TEXT NOT NULL DEFAULT 'local',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        deleted_at INTEGER NULL,
+        title TEXT NOT NULL,
+        category TEXT NOT NULL,
+        start_time INTEGER NOT NULL,
+        end_time INTEGER NOT NULL,
+        participants_or_location TEXT NULL,
+        external_ref TEXT NULL,
+        notes TEXT NULL,
+        is_completed INTEGER NOT NULL DEFAULT 0,
+        linked_task_id TEXT NULL
+      );
+    ''');
+
+    final countRows = await _db
+        .customSelect('SELECT COUNT(*) AS cnt FROM calendar_events')
+        .get();
+    final cnt = countRows.isNotEmpty ? (countRows.first.read<int>('cnt')) : 0;
+
+    if (cnt == 0) {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final tomorrow = today.add(const Duration(days: 1));
+      final inTwoDays = today.add(const Duration(days: 2));
+      final yesterday = today.subtract(const Duration(days: 1));
+      final inFiveDays = today.add(const Duration(days: 5));
+
+      final seeds = [
+        (
+          'Daily Standup & Triage Architecture',
+          CalendarEventCategory.teamSync,
+          today.add(const Duration(hours: 9, minutes: 30)),
+          today.add(const Duration(hours: 10, minutes: 0)),
+          'Teams • Équipe Core & Tech Leads',
+          'AB#8400',
+          'Point quotidien sur les blocages et priorités de la Pile Active.',
+          true,
+        ),
+        (
+          'Comité Architecture : Validation ADR-014 Sync V2',
+          CalendarEventCategory.meeting,
+          today.add(const Duration(hours: 11, minutes: 0)),
+          today.add(const Duration(hours: 12, minutes: 0)),
+          'Teams • CTO, SecOps, Lead Data',
+          'AB#8412',
+          'Arbitrage final sur le pattern Outbox SQLite -> Supabase PostgreSQL.',
+          false,
+        ),
+        (
+          'Sanctuaire Deep Work : Modélisation Contrat RPC V2',
+          CalendarEventCategory.architecture,
+          today.add(const Duration(hours: 14, minutes: 0)),
+          today.add(const Duration(hours: 15, minutes: 30)),
+          'Focus Individuel (Ne pas déranger)',
+          'AB#8412',
+          'Créneau protégé sans interruption pour avancer sur la Tâche de Fond.',
+          false,
+        ),
+        (
+          'Revue Hebdo Dette Technique & Deadlocks SQL',
+          CalendarEventCategory.meeting,
+          today.add(const Duration(hours: 16, minutes: 30)),
+          today.add(const Duration(hours: 17, minutes: 15)),
+          'Salle Atlas / Teams • Lucas M., Yassine B.',
+          'AB#8904',
+          'Analyse des plans d\'exécution PostgreSQL et verrous transactionnels.',
+          false,
+        ),
+        (
+          'Audit Sécurité : Rotation Certificats OAuth2 SSO Partenaires',
+          CalendarEventCategory.meeting,
+          tomorrow.add(const Duration(hours: 10, minutes: 0)),
+          tomorrow.add(const Duration(hours: 11, minutes: 0)),
+          'Teams • Équipe SecOps & IAM',
+          'AB#8911',
+          'Validation de la procédure de bascule sans coupure de service.',
+          false,
+        ),
+        (
+          'Go / No-Go Mise en Production Release 2.4',
+          CalendarEventCategory.deadline,
+          tomorrow.add(const Duration(hours: 15, minutes: 0)),
+          tomorrow.add(const Duration(hours: 16, minutes: 0)),
+          'Comité Release • Direction Technique',
+          'AB#8950',
+          'Vérification des résultats du benchmark k6 sur le cluster AKS.',
+          false,
+        ),
+        (
+          'Atelier Event-Driven Architecture (Kafka / EventHub)',
+          CalendarEventCategory.architecture,
+          inTwoDays.add(const Duration(hours: 14, minutes: 0)),
+          inTwoDays.add(const Duration(hours: 16, minutes: 0)),
+          'Salle Orion • Data Platform',
+          'AB#8390',
+          'Dimensionnement des partitions et gestion de la Dead-Letter Queue.',
+          false,
+        ),
+        (
+          'Point Mensuel FinOps & Coûts Cloud Azure',
+          CalendarEventCategory.teamSync,
+          yesterday.add(const Duration(hours: 11, minutes: 0)),
+          yesterday.add(const Duration(hours: 12, minutes: 0)),
+          'Teams • Thomas R. (DevOps)',
+          'AB#8655',
+          'Optimisation des réservations d\'instances AKS et stockage.',
+          true,
+        ),
+        (
+          'Livraison Contrat OpenAPI 3.1 Mobile',
+          CalendarEventCategory.deadline,
+          inFiveDays.add(const Duration(hours: 17, minutes: 0)),
+          inFiveDays.add(const Duration(hours: 18, minutes: 0)),
+          'Clara V. (Tech Lead Mobile)',
+          'AB#8699',
+          'Validation finale des schémas JSON et pagination.',
+          false,
+        ),
+      ];
+
+      for (final s in seeds) {
+        await _db.customStatement(
+          '''
+          INSERT INTO calendar_events (
+            id, user_id, workspace_id, visibility, sync_status,
+            created_at, updated_at, deleted_at, title, category,
+            start_time, end_time, participants_or_location, external_ref,
+            notes, is_completed, linked_task_id
+          ) VALUES (?, ?, ?, 'team', 'local', ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+          ''',
+          [
+            _uuid.v4(),
+            kDefaultUserId,
+            kDefaultWorkspaceId,
+            now.millisecondsSinceEpoch,
+            now.millisecondsSinceEpoch,
+            s.$1,
+            s.$2.dbValue,
+            s.$3.millisecondsSinceEpoch,
+            s.$4.millisecondsSinceEpoch,
+            s.$5,
+            s.$6,
+            s.$7,
+            s.$8 ? 1 : 0,
+          ],
+        );
+      }
+    }
+    _calendarTableInitialized = true;
+  }
+
+  Future<List<CalendarEventItem>> _loadCalendarEventsFromDb() async {
+    await _ensureCalendarTableAndSeed();
+    final rows = await _db.customSelect(
+      '''
+      SELECT * FROM calendar_events
+      WHERE deleted_at IS NULL
+      ORDER BY start_time ASC
+      ''',
+    ).get();
+
+    return rows.map((r) {
+      final deletedMs = r.readNullable<int>('deleted_at');
+      return CalendarEventItem(
+        id: r.read<String>('id'),
+        userId: r.read<String>('user_id'),
+        workspaceId: r.read<String>('workspace_id'),
+        visibility: r.read<String>('visibility'),
+        syncStatus: r.read<String>('sync_status'),
+        createdAt: DateTime.fromMillisecondsSinceEpoch(r.read<int>('created_at')),
+        updatedAt: DateTime.fromMillisecondsSinceEpoch(r.read<int>('updated_at')),
+        deletedAt: deletedMs != null
+            ? DateTime.fromMillisecondsSinceEpoch(deletedMs)
+            : null,
+        title: r.read<String>('title'),
+        category: CalendarEventCategory.fromDb(r.read<String>('category')),
+        startTime: DateTime.fromMillisecondsSinceEpoch(r.read<int>('start_time')),
+        endTime: DateTime.fromMillisecondsSinceEpoch(r.read<int>('end_time')),
+        participantsOrLocation: r.readNullable<String>('participants_or_location'),
+        externalRef: r.readNullable<String>('external_ref'),
+        notes: r.readNullable<String>('notes'),
+        isCompleted: r.read<int>('is_completed') == 1,
+        linkedTaskId: r.readNullable<String>('linked_task_id'),
+      );
+    }).toList();
+  }
+
+  void _notifyCalendarChanged() {
+    if (!_calendarChangeController.isClosed) {
+      _calendarChangeController.add(null);
+    }
+  }
+
+  @override
+  Stream<List<CalendarEventItem>> watchCalendarEvents() async* {
+    yield await _loadCalendarEventsFromDb();
+    await for (final _ in _calendarChangeController.stream) {
+      yield await _loadCalendarEventsFromDb();
+    }
+  }
+
+  @override
+  Future<String> addCalendarEvent({
+    required String title,
+    required CalendarEventCategory category,
+    required DateTime startTime,
+    required DateTime endTime,
+    String? participantsOrLocation,
+    String? externalRef,
+    String? notes,
+  }) async {
+    await _ensureCalendarTableAndSeed();
+    final now = DateTime.now();
+    final id = _uuid.v4();
+    final validEnd = endTime.isAfter(startTime)
+        ? endTime
+        : startTime.add(const Duration(minutes: 45));
+
+    await _db.customStatement(
+      '''
+      INSERT INTO calendar_events (
+        id, user_id, workspace_id, visibility, sync_status,
+        created_at, updated_at, deleted_at, title, category,
+        start_time, end_time, participants_or_location, external_ref,
+        notes, is_completed, linked_task_id
+      ) VALUES (?, ?, ?, 'team', 'pending', ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 0, NULL)
+      ''',
+      [
+        id,
+        kDefaultUserId,
+        kDefaultWorkspaceId,
+        now.millisecondsSinceEpoch,
+        now.millisecondsSinceEpoch,
+        title.trim(),
+        category.dbValue,
+        startTime.millisecondsSinceEpoch,
+        validEnd.millisecondsSinceEpoch,
+        participantsOrLocation != null && participantsOrLocation.trim().isNotEmpty
+            ? participantsOrLocation.trim()
+            : null,
+        externalRef != null && externalRef.trim().isNotEmpty
+            ? externalRef.trim()
+            : null,
+        notes != null && notes.trim().isNotEmpty ? notes.trim() : null,
+      ],
+    );
+    _notifyCalendarChanged();
+    return id;
+  }
+
+  @override
+  Future<void> updateCalendarEvent(CalendarEventItem event) async {
+    await _ensureCalendarTableAndSeed();
+    final now = DateTime.now();
+    await _db.customStatement(
+      '''
+      UPDATE calendar_events
+      SET title = ?, category = ?, start_time = ?, end_time = ?,
+          participants_or_location = ?, external_ref = ?, notes = ?,
+          is_completed = ?, updated_at = ?, sync_status = 'pending'
+      WHERE id = ?
+      ''',
+      [
+        event.title.trim(),
+        event.category.dbValue,
+        event.startTime.millisecondsSinceEpoch,
+        event.endTime.millisecondsSinceEpoch,
+        event.participantsOrLocation,
+        event.externalRef,
+        event.notes,
+        event.isCompleted ? 1 : 0,
+        now.millisecondsSinceEpoch,
+        event.id,
+      ],
+    );
+    _notifyCalendarChanged();
+  }
+
+  @override
+  Future<void> toggleCalendarEventCompleted(
+      String eventId, bool isCompleted) async {
+    await _ensureCalendarTableAndSeed();
+    final now = DateTime.now();
+    await _db.customStatement(
+      '''
+      UPDATE calendar_events
+      SET is_completed = ?, updated_at = ?, sync_status = 'pending'
+      WHERE id = ?
+      ''',
+      [
+        isCompleted ? 1 : 0,
+        now.millisecondsSinceEpoch,
+        eventId,
+      ],
+    );
+    _notifyCalendarChanged();
+  }
+
+  @override
+  Future<void> deleteCalendarEvent(String eventId) async {
+    await _ensureCalendarTableAndSeed();
+    final now = DateTime.now();
+    await _db.customStatement(
+      '''
+      UPDATE calendar_events
+      SET deleted_at = ?, updated_at = ?, sync_status = 'pending'
+      WHERE id = ?
+      ''',
+      [
+        now.millisecondsSinceEpoch,
+        now.millisecondsSinceEpoch,
+        eventId,
+      ],
+    );
+    _notifyCalendarChanged();
+  }
+
+  @override
+  Future<void> pushCalendarEventToStack({
+    required String eventId,
+    required String resumeNote,
+  }) async {
+    final events = await _loadCalendarEventsFromDb();
+    final ev = events.where((e) => e.id == eventId).firstOrNull;
+    if (ev == null) return;
+
+    await pushInterruption(
+      resumeNote: resumeNote,
+      newUrgencyTitle: '📅 [${ev.formattedTimeRange}] ${ev.title}',
+      externalRef: ev.externalRef,
+      criticality: 2,
+    );
+
+    await toggleCalendarEventCompleted(eventId, true);
+  }
+
+  @override
+  Future<List<CalendarEventItem>> autoCompletePastCalendarEvents([
+    DateTime? nowOverride,
+  ]) async {
+    final now = nowOverride ?? DateTime.now();
+    final events = await _loadCalendarEventsFromDb();
+    final pastUncompleted = events
+        .where((e) => !e.isCompleted && e.endTime.isBefore(now))
+        .toList();
+
+    if (pastUncompleted.isEmpty) return const [];
+
+    for (final ev in pastUncompleted) {
+      await _db.customStatement(
+        '''
+        UPDATE calendar_events
+        SET is_completed = 1, updated_at = ?, sync_status = 'pending'
+        WHERE id = ?
+        ''',
+        [
+          now.millisecondsSinceEpoch,
+          ev.id,
+        ],
+      );
+    }
+    _notifyCalendarChanged();
+    return pastUncompleted
+        .map((e) => e.copyWith(isCompleted: true, updatedAt: now))
+        .toList();
   }
 }
 

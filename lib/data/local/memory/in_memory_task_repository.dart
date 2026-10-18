@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:uuid/uuid.dart';
+import '../../../domain/models/calendar_event.dart';
 import '../../../domain/models/task_enums.dart';
 import '../../../domain/repositories/task_repository.dart';
 import '../drift/app_database.dart';
@@ -13,6 +14,7 @@ class InMemoryTaskRepository implements TaskRepository {
   final List<PrioTask> _tasks = [];
   final List<MicroMilestone> _milestones = [];
   final List<MorningCheckItem> _morningChecks = [];
+  final List<CalendarEventItem> _calendarEvents = [];
 
   final _changeController = StreamController<void>.broadcast();
 
@@ -334,6 +336,165 @@ class InMemoryTaskRepository implements TaskRepository {
         stackOrder: 0,
         elapsedSeconds: 900,
         interruptionCount: 1,
+      ),
+    ]);
+
+    // 7. Événements du Calendrier & Réunions (Aujourd'hui + Semaine / Mois)
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+    final inTwoDays = today.add(const Duration(days: 2));
+    final yesterday = today.subtract(const Duration(days: 1));
+    final inFiveDays = today.add(const Duration(days: 5));
+
+    // Créneau tout juste dépassé (fin il y a 10 min) pour démontrer la clôture automatique + notification
+    final justEndedStart = now.subtract(const Duration(minutes: 55));
+    final justEndedEnd = now.subtract(const Duration(minutes: 10));
+
+    // Prochaine réunion imminente (début dans 10 min) pour démontrer l'alerte de réunion imminente
+    final nextMeetingStart = now.add(const Duration(minutes: 10));
+    final nextMeetingEnd = now.add(const Duration(minutes: 55));
+
+    // Second créneau à venir aujourd'hui (début dans 1h15)
+    final laterStart = now.add(const Duration(minutes: 75));
+    final laterEnd = now.add(const Duration(minutes: 135));
+
+    _calendarEvents.addAll([
+      CalendarEventItem(
+        id: _uuid.v4(),
+        userId: kDefaultUserId,
+        workspaceId: kDefaultWorkspaceId,
+        createdAt: now,
+        updatedAt: now,
+        title: 'Daily Standup & Triage Architecture',
+        category: CalendarEventCategory.teamSync,
+        startTime: today.add(const Duration(hours: 9, minutes: 30)),
+        endTime: today.add(const Duration(hours: 10, minutes: 0)),
+        participantsOrLocation: 'Teams • Équipe Core & Tech Leads',
+        externalRef: 'AB#8400',
+        notes: 'Point quotidien sur les blocages et priorités de la Pile Active.',
+        isCompleted: true,
+      ),
+      CalendarEventItem(
+        id: _uuid.v4(),
+        userId: kDefaultUserId,
+        workspaceId: kDefaultWorkspaceId,
+        createdAt: now,
+        updatedAt: now,
+        title: 'Revue Hebdo Dette Technique & Deadlocks SQL',
+        category: CalendarEventCategory.meeting,
+        startTime: justEndedStart,
+        endTime: justEndedEnd,
+        participantsOrLocation: 'Salle Atlas / Teams • Lucas M., Yassine B.',
+        externalRef: 'AB#8904',
+        notes: 'Analyse des plans d\'exécution PostgreSQL et verrous transactionnels.',
+        isCompleted: false, // Sera clôturée automatiquement car l'heure de fin est dépassée !
+      ),
+      CalendarEventItem(
+        id: _uuid.v4(),
+        userId: kDefaultUserId,
+        workspaceId: kDefaultWorkspaceId,
+        createdAt: now,
+        updatedAt: now,
+        title: 'Comité Architecture : Validation ADR-014 Sync V2',
+        category: CalendarEventCategory.meeting,
+        startTime: nextMeetingStart,
+        endTime: nextMeetingEnd,
+        participantsOrLocation: 'Teams • CTO, SecOps, Lead Data',
+        externalRef: 'AB#8412',
+        notes: 'Arbitrage final sur le pattern Outbox SQLite -> Supabase PostgreSQL.',
+        isCompleted: false,
+      ),
+      CalendarEventItem(
+        id: _uuid.v4(),
+        userId: kDefaultUserId,
+        workspaceId: kDefaultWorkspaceId,
+        createdAt: now,
+        updatedAt: now,
+        title: 'Sanctuaire Deep Work : Modélisation Contrat RPC V2',
+        category: CalendarEventCategory.architecture,
+        startTime: laterStart,
+        endTime: laterEnd,
+        participantsOrLocation: 'Focus Individuel (Ne pas déranger)',
+        externalRef: 'AB#8412',
+        notes: 'Créneau protégé sans interruption pour avancer sur la Tâche de Fond.',
+        isCompleted: false,
+      ),
+      // Demain
+      CalendarEventItem(
+        id: _uuid.v4(),
+        userId: kDefaultUserId,
+        workspaceId: kDefaultWorkspaceId,
+        createdAt: now,
+        updatedAt: now,
+        title: 'Audit Sécurité : Rotation Certificats OAuth2 SSO Partenaires',
+        category: CalendarEventCategory.meeting,
+        startTime: tomorrow.add(const Duration(hours: 10, minutes: 0)),
+        endTime: tomorrow.add(const Duration(hours: 11, minutes: 0)),
+        participantsOrLocation: 'Teams • Équipe SecOps & IAM',
+        externalRef: 'AB#8911',
+        notes: 'Validation de la procédure de bascule sans coupure de service.',
+        isCompleted: false,
+      ),
+      CalendarEventItem(
+        id: _uuid.v4(),
+        userId: kDefaultUserId,
+        workspaceId: kDefaultWorkspaceId,
+        createdAt: now,
+        updatedAt: now,
+        title: 'Go / No-Go Mise en Production Release 2.4',
+        category: CalendarEventCategory.deadline,
+        startTime: tomorrow.add(const Duration(hours: 15, minutes: 0)),
+        endTime: tomorrow.add(const Duration(hours: 16, minutes: 0)),
+        participantsOrLocation: 'Comité Release • Direction Technique',
+        externalRef: 'AB#8950',
+        notes: 'Vérification des résultats du benchmark k6 sur le cluster AKS.',
+        isCompleted: false,
+      ),
+      // Autres jours du mois
+      CalendarEventItem(
+        id: _uuid.v4(),
+        userId: kDefaultUserId,
+        workspaceId: kDefaultWorkspaceId,
+        createdAt: now,
+        updatedAt: now,
+        title: 'Atelier Event-Driven Architecture (Kafka / EventHub)',
+        category: CalendarEventCategory.architecture,
+        startTime: inTwoDays.add(const Duration(hours: 14, minutes: 0)),
+        endTime: inTwoDays.add(const Duration(hours: 16, minutes: 0)),
+        participantsOrLocation: 'Salle Orion • Data Platform',
+        externalRef: 'AB#8390',
+        notes: 'Dimensionnement des partitions et gestion de la Dead-Letter Queue.',
+        isCompleted: false,
+      ),
+      CalendarEventItem(
+        id: _uuid.v4(),
+        userId: kDefaultUserId,
+        workspaceId: kDefaultWorkspaceId,
+        createdAt: now,
+        updatedAt: now,
+        title: 'Point Mensuel FinOps & Coûts Cloud Azure',
+        category: CalendarEventCategory.teamSync,
+        startTime: yesterday.add(const Duration(hours: 11, minutes: 0)),
+        endTime: yesterday.add(const Duration(hours: 12, minutes: 0)),
+        participantsOrLocation: 'Teams • Thomas R. (DevOps)',
+        externalRef: 'AB#8655',
+        notes: 'Optimisation des réservations d\'instances AKS et stockage.',
+        isCompleted: true,
+      ),
+      CalendarEventItem(
+        id: _uuid.v4(),
+        userId: kDefaultUserId,
+        workspaceId: kDefaultWorkspaceId,
+        createdAt: now,
+        updatedAt: now,
+        title: 'Livraison Contrat OpenAPI 3.1 Mobile',
+        category: CalendarEventCategory.deadline,
+        startTime: inFiveDays.add(const Duration(hours: 17, minutes: 0)),
+        endTime: inFiveDays.add(const Duration(hours: 18, minutes: 0)),
+        participantsOrLocation: 'Clara V. (Tech Lead Mobile)',
+        externalRef: 'AB#8699',
+        notes: 'Validation finale des schémas JSON et pagination.',
+        isCompleted: false,
       ),
     ]);
   }
@@ -964,6 +1125,143 @@ class InMemoryTaskRepository implements TaskRepository {
       }
     }
     _notify();
+  }
+
+  // --- CALENDRIER & AGENDA ---
+
+  @override
+  Stream<List<CalendarEventItem>> watchCalendarEvents() {
+    return _reactiveStream(() {
+      final list = _calendarEvents
+          .where((e) => e.deletedAt == null)
+          .toList()
+        ..sort((a, b) => a.startTime.compareTo(b.startTime));
+      return list;
+    });
+  }
+
+  @override
+  Future<String> addCalendarEvent({
+    required String title,
+    required CalendarEventCategory category,
+    required DateTime startTime,
+    required DateTime endTime,
+    String? participantsOrLocation,
+    String? externalRef,
+    String? notes,
+  }) async {
+    final now = DateTime.now();
+    final id = _uuid.v4();
+    final validEnd = endTime.isAfter(startTime)
+        ? endTime
+        : startTime.add(const Duration(minutes: 45));
+
+    _calendarEvents.add(
+      CalendarEventItem(
+        id: id,
+        userId: kDefaultUserId,
+        workspaceId: kDefaultWorkspaceId,
+        visibility: 'team',
+        syncStatus: SyncStatus.pending.dbValue,
+        createdAt: now,
+        updatedAt: now,
+        title: title.trim(),
+        category: category,
+        startTime: startTime,
+        endTime: validEnd,
+        participantsOrLocation:
+            participantsOrLocation != null && participantsOrLocation.trim().isNotEmpty
+                ? participantsOrLocation.trim()
+                : null,
+        externalRef: externalRef != null && externalRef.trim().isNotEmpty
+            ? externalRef.trim()
+            : null,
+        notes: notes != null && notes.trim().isNotEmpty ? notes.trim() : null,
+        isCompleted: false,
+      ),
+    );
+    _notify();
+    return id;
+  }
+
+  @override
+  Future<void> updateCalendarEvent(CalendarEventItem event) async {
+    final idx = _calendarEvents.indexWhere((e) => e.id == event.id);
+    if (idx != -1) {
+      _calendarEvents[idx] = event.copyWith(
+        updatedAt: DateTime.now(),
+        syncStatus: SyncStatus.pending.dbValue,
+      );
+      _notify();
+    }
+  }
+
+  @override
+  Future<void> toggleCalendarEventCompleted(String eventId, bool isCompleted) async {
+    final idx = _calendarEvents.indexWhere((e) => e.id == eventId);
+    if (idx != -1) {
+      _calendarEvents[idx] = _calendarEvents[idx].copyWith(
+        isCompleted: isCompleted,
+        updatedAt: DateTime.now(),
+        syncStatus: SyncStatus.pending.dbValue,
+      );
+      _notify();
+    }
+  }
+
+  @override
+  Future<void> deleteCalendarEvent(String eventId) async {
+    _calendarEvents.removeWhere((e) => e.id == eventId);
+    _notify();
+  }
+
+  @override
+  Future<void> pushCalendarEventToStack({
+    required String eventId,
+    required String resumeNote,
+  }) async {
+    final idx = _calendarEvents.indexWhere((e) => e.id == eventId);
+    if (idx == -1) return;
+    final ev = _calendarEvents[idx];
+
+    await pushInterruption(
+      resumeNote: resumeNote,
+      newUrgencyTitle: '📅 [${ev.formattedTimeRange}] ${ev.title}',
+      externalRef: ev.externalRef,
+      criticality: 2,
+    );
+
+    _calendarEvents[idx] = ev.copyWith(
+      isCompleted: true,
+      updatedAt: DateTime.now(),
+    );
+    _notify();
+  }
+
+  @override
+  Future<List<CalendarEventItem>> autoCompletePastCalendarEvents([
+    DateTime? nowOverride,
+  ]) async {
+    final now = nowOverride ?? DateTime.now();
+    final newlyCompleted = <CalendarEventItem>[];
+
+    for (int i = 0; i < _calendarEvents.length; i++) {
+      final ev = _calendarEvents[i];
+      if (ev.deletedAt == null && !ev.isCompleted && ev.endTime.isBefore(now)) {
+        final updated = ev.copyWith(
+          isCompleted: true,
+          updatedAt: now,
+          syncStatus: SyncStatus.pending.dbValue,
+        );
+        _calendarEvents[i] = updated;
+        newlyCompleted.add(updated);
+      }
+    }
+
+    if (newlyCompleted.isNotEmpty) {
+      _notify();
+    }
+    return newlyCompleted;
   }
 }
 

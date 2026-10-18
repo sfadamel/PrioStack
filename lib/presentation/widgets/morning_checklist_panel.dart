@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
 import '../providers/priostack_providers.dart';
+import 'calendar_panel.dart';
 import 'sync_reorderable_list.dart';
 
-/// Zone 1 (Gauche sur PC) : Profil Architecte/Manager + "Morning Check-list" + Carte d'action rapide
-/// Reprend fidèlement l'esthétique de la colonne gauche de la maquette Neumorphism (Sombre & Clair).
-class MorningChecklistPanel extends ConsumerWidget {
+/// Zone 1 (Gauche sur PC) : Colonne épurée "Routine & Agenda du jour"
+/// Utilise un sélecteur segmenté (☀️ Routine | 📅 Agenda) pour offrir 100% de la hauteur
+/// disponible à chaque liste sans écrasement vertical ni boîtes redondantes.
+class MorningChecklistPanel extends ConsumerStatefulWidget {
   final VoidCallback onQuickCreatePressed;
 
   const MorningChecklistPanel({
@@ -15,441 +17,511 @@ class MorningChecklistPanel extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MorningChecklistPanel> createState() =>
+      _MorningChecklistPanelState();
+}
+
+class _MorningChecklistPanelState extends ConsumerState<MorningChecklistPanel> {
+  int _selectedSubView = 0; // 0 = Routine Matinale, 1 = Agenda du Jour
+
+  @override
+  Widget build(BuildContext context) {
     ref.watch(themeModeProvider);
     final checksAsync = ref.watch(morningChecksProvider);
+    final eventsAsync = ref.watch(calendarEventsProvider);
+    final now = DateTime.now();
+
+    final checksList = checksAsync.valueOrNull ?? const [];
+    final doneChecks = checksList.where((c) => c.isChecked).length;
+
+    final todayEvents = (eventsAsync.valueOrNull ?? const [])
+        .where((e) => e.isSameDay(now))
+        .toList()
+      ..sort((a, b) => a.startTime.compareTo(b.startTime));
 
     return Container(
       decoration: AppTheme.neumorphicCard(
         color: AppTheme.bgMain,
-        radius: 24,
+        radius: 16,
       ),
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // --- En-tête Profil Manager (inspiré de "Vitaliy D. • Online" sur la maquette) ---
-          Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  gradient: AppTheme.primaryGradient,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.accentBlue.withValues(alpha: 0.35),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                alignment: Alignment.center,
-                child: const Text(
-                  'AS',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Architecte & Manager',
-                      style: TextStyle(
-                        color: AppTheme.textPrimary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        Container(
-                          width: 7,
-                          height: 7,
-                          decoration: const BoxDecoration(
-                            color: AppTheme.neonGreen,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        const Text(
-                          'SQLite Local • V2 Sync-Ready',
-                          style: TextStyle(
-                            color: AppTheme.neonGreen,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-
-          // --- Pilule active bleue électrique (comme "My project task" sur la maquette) ---
+          // --- En-tête épuré + Sélecteur segmenté (Routine | Agenda) ---
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
-              gradient: AppTheme.primaryGradient,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.accentBlue.withValues(alpha: 0.42),
-                  blurRadius: 16,
-                  offset: const Offset(0, 5),
-                ),
-              ],
+              color: AppTheme.surfaceInput,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.borderSubtle),
             ),
             child: Row(
               children: [
-                const Icon(Icons.checklist_rtl_rounded, color: Colors.white, size: 18),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Text(
-                    'Morning Check-list',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13.5,
-                    ),
+                Expanded(
+                  child: _buildSegmentTab(
+                    index: 0,
+                    icon: Icons.checklist_rtl_rounded,
+                    label: 'Routine',
+                    badgeText: '$doneChecks/${checksList.length}',
                   ),
                 ),
-                checksAsync.when(
-                  data: (items) {
-                    final done = items.where((i) => i.isChecked).length;
-                    return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.25),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        '$done/${items.length}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    );
-                  },
-                  loading: () => const SizedBox.shrink(),
-                  error: (_, __) => const SizedBox.shrink(),
+                Expanded(
+                  child: _buildSegmentTab(
+                    index: 1,
+                    icon: Icons.calendar_today_rounded,
+                    label: 'Agenda',
+                    badgeText: '${todayEvents.length}',
+                  ),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 14),
 
-          // --- En-tête de section + Boutons "+ Ajouter" & "Reset Jour" ---
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'ROUTINE QUOTIDIENNE',
-                style: TextStyle(
-                  color: AppTheme.textMuted,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.8,
+          // --- Barre d'actions contextuelle fine ---
+          if (_selectedSubView == 0)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'POINTS DE CONTRÔLE',
+                  style: TextStyle(
+                    color: AppTheme.textMuted,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.7,
+                  ),
                 ),
-              ),
-              Row(
-                children: [
-                  Tooltip(
-                    message: 'Ajouter un point de contrôle dans la routine du matin',
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(8),
+                Row(
+                  children: [
+                    _buildHeaderActionButton(
+                      icon: Icons.add_rounded,
+                      label: 'Ajouter',
+                      color: AppTheme.accentBlue,
                       onTap: () => _showAddCheckDialog(context, ref),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppTheme.accentBlue.withValues(alpha: 0.14),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: AppTheme.accentBlue.withValues(alpha: 0.45),
-                          ),
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.add_rounded,
-                                size: 13, color: AppTheme.accentBlue),
-                            SizedBox(width: 3),
-                            Text(
-                              'Ajouter',
-                              style: TextStyle(
-                                color: AppTheme.accentBlue,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
+                    ),
+                    const SizedBox(width: 6),
+                    _buildHeaderActionButton(
+                      icon: Icons.refresh_rounded,
+                      label: 'Reset',
+                      color: AppTheme.textSecondary,
+                      onTap: () => ref
+                          .read(taskRepositoryProvider)
+                          .resetMorningChecklist(),
+                    ),
+                  ],
+                ),
+              ],
+            )
+          else
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'PLANNING DU JOUR',
+                  style: TextStyle(
+                    color: AppTheme.textMuted,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.7,
+                  ),
+                ),
+                Row(
+                  children: [
+                    _buildHeaderActionButton(
+                      icon: Icons.add_rounded,
+                      label: 'Réunion',
+                      color: AppTheme.accentBlue,
+                      onTap: () => showAddOrEditCalendarEventDialog(
+                        context,
+                        ref,
+                        initialDate: now,
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  Tooltip(
-                    message: 'Réinitialiser la check-list pour une nouvelle journée',
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: () => ref.read(taskRepositoryProvider).resetMorningChecklist(),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppTheme.surfaceElevated,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppTheme.borderHighlight),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.refresh_rounded,
-                                size: 13, color: AppTheme.accentBlue),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Reset Jour',
-                              style: TextStyle(
-                                color: AppTheme.textPrimary,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                    const SizedBox(width: 6),
+                    _buildHeaderActionButton(
+                      icon: Icons.open_in_new_rounded,
+                      label: 'Mois',
+                      color: AppTheme.textSecondary,
+                      onTap: () => ref
+                          .read(cockpitMainViewProvider.notifier)
+                          .setView(CockpitMainView.calendar),
                     ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+                  ],
+                ),
+              ],
+            ),
           const SizedBox(height: 10),
 
-          // --- Liste des vérifications récurrentes dans une carte Neumorphique ---
+          // --- Corps principal occupant 100% de la hauteur restante ---
           Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: AppTheme.neumorphicCard(
-                color: AppTheme.surfaceCard,
-                radius: 18,
-              ),
-              child: checksAsync.when(
-                data: (items) {
-                  if (items.isEmpty) {
-                    return Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Aucune routine configurée.',
-                            style: TextStyle(color: AppTheme.textMuted),
-                          ),
-                          const SizedBox(height: 8),
-                          TextButton.icon(
-                            onPressed: () => _showAddCheckDialog(context, ref),
-                            icon: const Icon(Icons.add_rounded, size: 16),
-                            label: const Text('Ajouter un contrôle'),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-                  return SyncReorderableList(
-                    items: items,
-                    idOf: (item) => 'morning_${item.id}',
-                    onReordered: (reordered) {
-                      ref.read(taskRepositoryProvider).reorderMorningChecks(
-                            reordered.map((e) => e.id).toList(),
-                          );
-                    },
-                    itemBuilder: (context, item, index) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () => ref
-                              .read(taskRepositoryProvider)
-                              .toggleMorningCheck(item.id, !item.isChecked),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 10),
-                            decoration: BoxDecoration(
-                              color: item.isChecked
-                                  ? AppTheme.bgMain.withValues(alpha: 0.6)
-                                  : AppTheme.surfaceElevated,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: item.isChecked
-                                    ? AppTheme.neonGreen.withValues(alpha: 0.35)
-                                    : AppTheme.borderSubtle,
-                              ),
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                ReorderableDragStartListener(
-                                  index: index,
-                                  child: MouseRegion(
-                                    cursor: SystemMouseCursors.grab,
-                                    child: Padding(
-                                      padding: const EdgeInsets.only(right: 6, top: 1),
-                                      child: Icon(
-                                        Icons.drag_indicator_rounded,
-                                        size: 17,
-                                        color: AppTheme.textMuted,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                Container(
-                                  margin: const EdgeInsets.only(top: 1),
-                                  width: 19,
-                                  height: 19,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(6),
-                                    color: item.isChecked
-                                        ? AppTheme.neonGreen
-                                        : AppTheme.surfaceInput,
-                                    border: Border.all(
-                                      color: item.isChecked
-                                          ? AppTheme.neonGreen
-                                          : AppTheme.borderHighlight,
-                                    ),
-                                  ),
-                                  child: item.isChecked
-                                      ? const Icon(Icons.check_rounded,
-                                          size: 14, color: Colors.black)
-                                      : null,
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        item.title,
-                                        style: TextStyle(
-                                          color: item.isChecked
-                                              ? AppTheme.textMuted
-                                              : AppTheme.textPrimary,
-                                          fontSize: 12.5,
-                                          fontWeight: FontWeight.w500,
-                                          decoration: item.isChecked
-                                              ? TextDecoration.lineThrough
-                                              : null,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: AppTheme.bgDeep,
-                                          borderRadius: BorderRadius.circular(5),
-                                        ),
-                                        child: Text(
-                                          item.category,
-                                          style: TextStyle(
-                                            color: AppTheme.textSecondary,
-                                            fontSize: 10,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                InkWell(
-                                  borderRadius: BorderRadius.circular(6),
-                                  onTap: () => ref
-                                      .read(taskRepositoryProvider)
-                                      .deleteMorningCheckItem(item.id),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(4),
-                                    child: Icon(
-                                      Icons.delete_outline_rounded,
-                                      size: 16,
-                                      color: AppTheme.textMuted,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Center(child: Text('Erreur: $e')),
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          // --- Carte inférieure "Create new task" avec bouton '+' lumineux bleu ---
-          InkWell(
-            borderRadius: BorderRadius.circular(18),
-            onTap: onQuickCreatePressed,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 14),
-              decoration: AppTheme.neumorphicCard(
-                color: AppTheme.surfaceCard,
-                radius: 18,
-              ),
-              child: Column(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: AppTheme.primaryGradient,
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppTheme.accentBlue.withValues(alpha: 0.55),
-                          blurRadius: 16,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    ),
-                    child: const Icon(Icons.add_rounded, color: Colors.white, size: 22),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Capture Éclair (Ctrl + K)',
-                    style: TextStyle(
-                      color: AppTheme.textPrimary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Urgence, Assistance ou Fond',
-                    style: TextStyle(
-                      color: AppTheme.textMuted,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            child: _selectedSubView == 0
+                ? _buildRoutineList(context, checksAsync)
+                : _buildAgendaList(context, todayEvents),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSegmentTab({
+    required int index,
+    required IconData icon,
+    required String label,
+    required String badgeText,
+  }) {
+    final isSelected = _selectedSubView == index;
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => setState(() => _selectedSubView = index),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.surfaceCard : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: isSelected
+              ? Border.all(color: AppTheme.borderHighlight, width: 1)
+              : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: isSelected ? AppTheme.accentBlue : AppTheme.textMuted,
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color:
+                      isSelected ? AppTheme.textPrimary : AppTheme.textSecondary,
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ),
+            const SizedBox(width: 5),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5.5, vertical: 1),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? AppTheme.accentBlue.withValues(alpha: 0.14)
+                    : AppTheme.surfaceElevated,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                badgeText,
+                style: TextStyle(
+                  color:
+                      isSelected ? AppTheme.accentBlue : AppTheme.textMuted,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderActionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(7),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceCard,
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(color: AppTheme.borderSubtle),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 12.5, color: color),
+            const SizedBox(width: 3),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRoutineList(
+    BuildContext context,
+    AsyncValue<List<dynamic>> checksAsync,
+  ) {
+    return checksAsync.when(
+      data: (items) {
+        if (items.isEmpty) {
+          return Center(
+            child: Text(
+              'Aucune routine configurée.',
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+            ),
+          );
+        }
+
+        return SyncReorderableList(
+          items: items,
+          idOf: (item) => 'morning_${item.id}',
+          onReordered: (reordered) {
+            ref.read(taskRepositoryProvider).reorderMorningChecks(
+                  reordered.map<String>((e) => e.id as String).toList(),
+                );
+          },
+          itemBuilder: (context, item, index) {
+            final bool isChecked = item.isChecked as bool;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: () => ref
+                    .read(taskRepositoryProvider)
+                    .toggleMorningCheck(item.id as String, !isChecked),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: isChecked
+                        ? AppTheme.surfaceCard.withValues(alpha: 0.45)
+                        : AppTheme.surfaceCard,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isChecked
+                          ? AppTheme.borderSubtle.withValues(alpha: 0.5)
+                          : AppTheme.borderSubtle,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      ReorderableDragStartListener(
+                        index: index,
+                        child: MouseRegion(
+                          cursor: SystemMouseCursors.grab,
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: Icon(
+                              Icons.drag_indicator_rounded,
+                              size: 15,
+                              color: AppTheme.textMuted.withValues(alpha: 0.6),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Container(
+                        width: 17,
+                        height: 17,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(5),
+                          color: isChecked
+                              ? AppTheme.neonGreen
+                              : Colors.transparent,
+                          border: Border.all(
+                            color: isChecked
+                                ? AppTheme.neonGreen
+                                : AppTheme.borderHighlight,
+                            width: 1.3,
+                          ),
+                        ),
+                        child: isChecked
+                            ? const Icon(Icons.check_rounded,
+                                size: 12, color: Colors.black)
+                            : null,
+                      ),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.title as String,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: isChecked
+                                    ? AppTheme.textMuted
+                                    : AppTheme.textPrimary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                height: 1.25,
+                                decoration: isChecked
+                                    ? TextDecoration.lineThrough
+                                    : null,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              item.category as String,
+                              style: TextStyle(
+                                color: AppTheme.textMuted,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(6),
+                        onTap: () => ref
+                            .read(taskRepositoryProvider)
+                            .deleteMorningCheckItem(item.id as String),
+                        child: Padding(
+                          padding: const EdgeInsets.all(3),
+                          child: Icon(
+                            Icons.close_rounded,
+                            size: 14,
+                            color: AppTheme.textMuted.withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text('Erreur: $e')),
+    );
+  }
+
+  Widget _buildAgendaList(BuildContext context, List<dynamic> todayEvents) {
+    if (todayEvents.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.event_available_rounded,
+              size: 28,
+              color: AppTheme.textMuted.withValues(alpha: 0.5),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Aucune réunion prévue aujourd\'hui.',
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: todayEvents.length,
+      itemBuilder: (ctx, idx) {
+        final ev = todayEvents[idx];
+        final Color accent = ev.category.accentColor as Color;
+        final bool isCompleted = ev.isCompleted as bool;
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 7),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () {
+              ref
+                  .read(selectedCalendarDateProvider.notifier)
+                  .selectDate(ev.startTime as DateTime);
+              ref
+                  .read(cockpitMainViewProvider.notifier)
+                  .setView(CockpitMainView.calendar);
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+              decoration: BoxDecoration(
+                color: isCompleted
+                    ? AppTheme.surfaceCard.withValues(alpha: 0.45)
+                    : AppTheme.surfaceCard,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.borderSubtle),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 3,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: isCompleted ? AppTheme.textMuted : accent,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          ev.formattedTimeRange as String,
+                          style: TextStyle(
+                            color: isCompleted ? AppTheme.textMuted : accent,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          ev.title as String,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: isCompleted
+                                ? AppTheme.textMuted
+                                : AppTheme.textPrimary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            decoration: isCompleted
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  InkWell(
+                    onTap: () => ref
+                        .read(taskRepositoryProvider)
+                        .toggleCalendarEventCompleted(
+                            ev.id as String, !isCompleted),
+                    child: Icon(
+                      isCompleted
+                          ? Icons.check_circle_rounded
+                          : Icons.radio_button_unchecked_rounded,
+                      size: 16,
+                      color: isCompleted
+                          ? AppTheme.neonGreen
+                          : AppTheme.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -462,7 +534,7 @@ class MorningChecklistPanel extends ConsumerWidget {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.surfaceCard,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(16),
           side: BorderSide(color: AppTheme.borderHighlight),
         ),
         title: Text(
@@ -498,7 +570,8 @@ class MorningChecklistPanel extends ConsumerWidget {
             child: const Text('Annuler'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accentBlue),
+            style:
+                ElevatedButton.styleFrom(backgroundColor: AppTheme.accentBlue),
             onPressed: () async {
               if (titleCtrl.text.trim().isNotEmpty) {
                 await ref

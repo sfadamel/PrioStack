@@ -3,11 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
 import '../../domain/models/task_enums.dart';
 import '../../domain/repositories/task_repository.dart';
+import '../providers/notification_provider.dart';
 import '../providers/priostack_providers.dart';
 import 'sync_reorderable_list.dart';
 
 /// Boîte de dialogue réutilisable pour déclencher un PUSH d'interruption
-/// (depuis le bouton central "🚨 Interruption (PUSH Urgence)" ou depuis l'onglet Urgences).
+/// (depuis le bouton central "Interruption (PUSH)" ou depuis l'onglet Urgences).
 Future<void> showPushInterruptionDialog(
   BuildContext context,
   WidgetRef ref, {
@@ -18,7 +19,8 @@ Future<void> showPushInterruptionDialog(
   await ref.read(focusTimerProvider.notifier).pauseTimer();
 
   final resumeNoteCtrl = TextEditingController();
-  final urgencyTitleCtrl = TextEditingController(text: existingUrgencyTitle ?? '');
+  final urgencyTitleCtrl =
+      TextEditingController(text: existingUrgencyTitle ?? '');
   final extRefCtrl = TextEditingController();
   final formKey = GlobalKey<FormState>();
 
@@ -30,8 +32,11 @@ Future<void> showPushInterruptionDialog(
     builder: (ctx) => AlertDialog(
       backgroundColor: AppTheme.surfaceCard,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(22),
-        side: BorderSide(color: AppTheme.neonPink.withValues(alpha: 0.65), width: 1.4),
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(
+          color: AppTheme.neonPink.withValues(alpha: 0.55),
+          width: 1.2,
+        ),
       ),
       title: Row(
         children: [
@@ -41,7 +46,8 @@ Future<void> showPushInterruptionDialog(
               gradient: AppTheme.urgencyGradient,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
+            child: const Icon(Icons.warning_amber_rounded,
+                color: Colors.white, size: 19),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -49,16 +55,16 @@ Future<void> showPushInterruptionDialog(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '🚨 PUSH Interruption sur la Pile',
+                  'PUSH Interruption sur la Pile',
                   style: TextStyle(
                     color: AppTheme.textPrimary,
-                    fontSize: 16,
+                    fontSize: 15.5,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
                 Text(
-                  'Le chronomètre Focus a été mis en pause automatiquement.',
-                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 11.5),
+                  'Chronomètre Focus mis en pause automatiquement.',
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 11),
                 ),
               ],
             ),
@@ -66,26 +72,26 @@ Future<void> showPushInterruptionDialog(
         ],
       ),
       content: SizedBox(
-        width: 480,
+        width: 460,
         child: Form(
           key: formKey,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Champ obligatoire : Note de reprise mentale
               const Text(
                 '1. Note de reprise obligatoire : où en étais-tu exactement ?',
                 style: TextStyle(
                   color: AppTheme.neonAmber,
                   fontWeight: FontWeight.w700,
-                  fontSize: 12.5,
+                  fontSize: 12,
                 ),
               ),
               const SizedBox(height: 6),
               Container(
-                decoration: AppTheme.neumorphicInset(radius: 12),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: AppTheme.neumorphicInset(radius: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 child: TextFormField(
                   controller: resumeNoteCtrl,
                   autofocus: true,
@@ -100,25 +106,24 @@ Future<void> showPushInterruptionDialog(
                   decoration: InputDecoration(
                     hintText:
                         'Ex: Je vérifiais l\'index composite sur la table sync_outbox (ligne 142)...',
-                    hintStyle: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+                    hintStyle:
+                        TextStyle(color: AppTheme.textMuted, fontSize: 12),
                     border: InputBorder.none,
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
-
-              // Détails de l'urgence à placer au sommet de la pile
+              const SizedBox(height: 14),
               Text(
                 '2. Urgence à empiler au sommet (ACTIVE TOP)',
                 style: TextStyle(
                   color: AppTheme.textPrimary,
                   fontWeight: FontWeight.w600,
-                  fontSize: 12.5,
+                  fontSize: 12,
                 ),
               ),
               const SizedBox(height: 6),
               Container(
-                decoration: AppTheme.neumorphicInset(radius: 12),
+                decoration: AppTheme.neumorphicInset(radius: 10),
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: TextFormField(
                   controller: urgencyTitleCtrl,
@@ -132,8 +137,10 @@ Future<void> showPushInterruptionDialog(
                     return null;
                   },
                   decoration: InputDecoration(
-                    hintText: 'Ex: Incident P1 — Timeout API Passerelle Paiement',
-                    hintStyle: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+                    hintText:
+                        'Ex: Incident P1 — Timeout API Passerelle Paiement',
+                    hintStyle:
+                        TextStyle(color: AppTheme.textMuted, fontSize: 12),
                     border: InputBorder.none,
                   ),
                 ),
@@ -141,14 +148,16 @@ Future<void> showPushInterruptionDialog(
               if (existingUrgencyTaskId == null) ...[
                 const SizedBox(height: 10),
                 Container(
-                  decoration: AppTheme.neumorphicInset(radius: 12),
+                  decoration: AppTheme.neumorphicInset(radius: 10),
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: TextFormField(
                     controller: extRefCtrl,
-                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 12.5),
+                    style:
+                        TextStyle(color: AppTheme.textPrimary, fontSize: 12.5),
                     decoration: InputDecoration(
                       hintText: 'Ticket Azure DevOps (optionnel, ex: AB#9012)',
-                      hintStyle: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+                      hintStyle:
+                          TextStyle(color: AppTheme.textMuted, fontSize: 12),
                       border: InputBorder.none,
                     ),
                   ),
@@ -167,7 +176,7 @@ Future<void> showPushInterruptionDialog(
           ),
         ),
         InkWell(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
           onTap: () async {
             if (!formKey.currentState!.validate()) return;
             await ref.read(taskRepositoryProvider).pushInterruption(
@@ -178,27 +187,28 @@ Future<void> showPushInterruptionDialog(
                       : null,
                   externalRef: extRefCtrl.text,
                 );
+            final pushedTitle =
+                existingUrgencyTitle ?? urgencyTitleCtrl.text.trim();
+            ref.read(appNotificationsProvider.notifier).pushNotification(
+                  title: '🚨 Interruption empilée (PUSH) : $pushedTitle',
+                  body:
+                      'Contexte sauvegardé : "${resumeNoteCtrl.text.trim()}"',
+                  type: AppNotificationType.stackPush,
+                );
             if (ctx.mounted) Navigator.pop(ctx);
           },
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
             decoration: BoxDecoration(
               gradient: AppTheme.urgencyGradient,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.neonPink.withValues(alpha: 0.4),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+              borderRadius: BorderRadius.circular(10),
             ),
             child: const Text(
               'Sauvegarder Contexte & PUSH',
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w700,
-                fontSize: 13,
+                fontSize: 12.5,
               ),
             ),
           ),
@@ -208,32 +218,46 @@ Future<void> showPushInterruptionDialog(
   );
 }
 
-/// Zone 2 (Centre sur PC) : "La Pile Active (The Stack)" — Sanctuaire & Gestion des Interruptions
-class ActiveStackPanel extends ConsumerWidget {
+/// Zone 2 (Centre sur PC) : "La Pile Active" — Sanctuaire de Focus épuré (style Linear / Things 3)
+class ActiveStackPanel extends ConsumerStatefulWidget {
   const ActiveStackPanel({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ActiveStackPanel> createState() => _ActiveStackPanelState();
+}
+
+class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
+  bool _showReserveDrawer = false;
+
+  @override
+  Widget build(BuildContext context) {
     ref.watch(themeModeProvider);
     final stackAsync = ref.watch(activeStackProvider);
     final backlogAsync = ref.watch(backlogDeepWorkProvider);
     final completedAsync = ref.watch(completedTasksProvider);
     final timerState = ref.watch(focusTimerProvider);
 
+    final backlogList = backlogAsync.valueOrNull ?? const [];
+
     return Container(
       decoration: AppTheme.neumorphicCard(
         color: AppTheme.bgMain,
-        radius: 24,
+        radius: 16,
       ),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // --- En-tête de la colonne centrale (Inspiré de "Task Manager" sur la maquette) ---
-          _buildHeader(context, ref, stackAsync.valueOrNull ?? const []),
-          const SizedBox(height: 16),
+          // --- En-tête épuré ---
+          _buildHeader(
+            context,
+            ref,
+            stackAsync.valueOrNull ?? const [],
+            backlogList.length,
+          ),
+          const SizedBox(height: 14),
 
-          // --- Corps de la Pile Active avec ligne verticale lumineuse (Call Stack) ---
+          // --- Corps de la Pile Active (100% largeur, sans ligne latérale encombrante) ---
           Expanded(
             child: stackAsync.when(
               data: (stackItems) {
@@ -241,103 +265,65 @@ class ActiveStackPanel extends ConsumerWidget {
                   return _buildEmptyStackState(
                     context,
                     ref,
-                    backlogAsync.valueOrNull ?? [],
-                    completedAsync.valueOrNull ?? [],
+                    backlogList,
+                    completedAsync.valueOrNull ?? const [],
                   );
                 }
 
-                // Le premier élément (stackOrder le plus élevé) est au SOMMET de la pile
                 final topItem = stackItems.first;
                 final pausedItems = stackItems.skip(1).toList();
 
-                return Stack(
+                return ListView(
+                  padding: EdgeInsets.zero,
                   children: [
-                    // Fil vertical lumineux bleu au centre (comme la timeline 13:30 de la maquette)
-                    Positioned(
-                      left: 26,
-                      top: 12,
-                      bottom: 12,
-                      child: Container(
-                        width: 2.5,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              AppTheme.accentBlue,
-                              AppTheme.accentIndigo.withValues(alpha: 0.4),
-                              Colors.transparent,
-                            ],
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppTheme.accentBlue.withValues(alpha: 0.6),
-                              blurRadius: 10,
-                              spreadRadius: 1,
+                    // 1. CARTE FOCUS AU SOMMET DE LA PILE
+                    _buildTopActiveCard(
+                      context,
+                      ref,
+                      topItem,
+                      timerState,
+                      stackItems.length,
+                    ),
+
+                    // 2. CARTES EN SOMMEIL SOUS LE SOMMET (si PUSH actif)
+                    if (pausedItems.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6, left: 2),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.layers_outlined,
+                                size: 14, color: AppTheme.neonAmber),
+                            const SizedBox(width: 6),
+                            Text(
+                              'EN SOMMEIL DANS LA PILE (${pausedItems.length})',
+                              style: const TextStyle(
+                                color: AppTheme.neonAmber,
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.6,
+                              ),
                             ),
                           ],
                         ),
                       ),
-                    ),
-
-                    // Cartes empilées de la Call Stack
-                    ListView(
-                      padding: const EdgeInsets.only(right: 4),
-                      children: [
-                        // Badge indicateur de profondeur de pile (Call Stack Pointer)
-                        _buildStackPointerPill(stackItems.length, topItem),
-                        const SizedBox(height: 12),
-
-                        // 1. CARTE AU SOMMET DE LA PILE (Urgence active OU Tâche de fond active)
-                        _buildTopActiveCard(context, ref, topItem, timerState),
-
-                        // 2. CARTES EN PAUSE SOUS LE SOMMET (Tâche de fond mise en sommeil par PUSH)
-                        if (pausedItems.isNotEmpty) ...[
-                          const SizedBox(height: 18),
-                          Padding(
-                            padding: const EdgeInsets.only(left: 48, bottom: 8),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.layers_clear_rounded,
-                                    size: 15, color: AppTheme.neonAmber),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'CONTEXTE EN SOMMEIL DANS LA PILE (${pausedItems.length})',
-                                  style: const TextStyle(
-                                    color: AppTheme.neonAmber,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.7,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          ...pausedItems.map(
-                            (paused) => Padding(
-                              padding: const EdgeInsets.only(bottom: 14),
-                              child: _buildPausedStackCard(context, ref, paused),
-                            ),
-                          ),
-                        ],
-
-                        // 3. Tâches de fond en réserve (Backlog) pour permuter si besoin (WIP Limit = 1)
-                        const SizedBox(height: 12),
-                        _buildBacklogSwitcher(
-                          context,
-                          ref,
-                          backlogAsync.valueOrNull ?? const [],
+                      ...pausedItems.map(
+                        (paused) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: _buildPausedStackCard(context, ref, paused),
                         ),
+                      ),
+                    ],
 
-                        // 4. Backlog des tâches déjà faites avec possibilité de les rendre de nouveau actives
-                        const SizedBox(height: 12),
-                        _buildCompletedHistorySection(
-                          context,
-                          ref,
-                          completedAsync.valueOrNull ?? const [],
-                        ),
-                      ],
-                    ),
+                    // 3. RÉSERVE TÂCHES DE FOND (Tiroir repliable discret)
+                    if (backlogList.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      _buildCollapsibleBacklogSwitcher(
+                        context,
+                        ref,
+                        backlogList,
+                      ),
+                    ],
                   ],
                 );
               },
@@ -354,140 +340,93 @@ class ActiveStackPanel extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     List<TaskWithMilestones> stackItems,
+    int reserveCount,
   ) {
-    final baseDeepWork = stackItems
-        .where((i) => i.task.type == TaskType.deepWork.dbValue)
-        .firstOrNull;
-    final completion = baseDeepWork?.completionPercent ?? 0;
+    final isUrgencyOnTop = stackItems.isNotEmpty &&
+        stackItems.first.task.status == TaskStackStatus.activeTop.dbValue;
 
     return Row(
       children: [
-        // Icône sanctuaire avec relief
+        Icon(
+          Icons.layers_rounded,
+          color: isUrgencyOnTop ? AppTheme.neonPink : AppTheme.accentBlue,
+          size: 19,
+        ),
+        const SizedBox(width: 8),
+        Text(
+          'Pile Active',
+          style: TextStyle(
+            color: AppTheme.textPrimary,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.3,
+          ),
+        ),
+        const SizedBox(width: 8),
         Container(
-          width: 46,
-          height: 46,
-          decoration: AppTheme.neumorphicCard(
-            color: AppTheme.surfaceElevated,
-            radius: 15,
-            glowColor: AppTheme.accentBlue,
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceCard,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: AppTheme.borderSubtle),
           ),
-          child: const Icon(
-            Icons.stacked_bar_chart_rounded,
-            color: AppTheme.accentBlue,
-            size: 24,
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'La Pile Active (The Stack)',
-                style: TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.4,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  const Icon(Icons.shield_rounded, size: 13, color: AppTheme.neonAmber),
-                  const SizedBox(width: 5),
-                  Text(
-                    'WIP Limit : 1 Tâche de Fond',
-                    style: TextStyle(
-                      color: AppTheme.textSecondary,
-                      fontSize: 12,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppTheme.surfaceElevated,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppTheme.borderHighlight),
-                    ),
-                    child: Text(
-                      '$completion%',
-                      style: TextStyle(
-                        color: AppTheme.textPrimary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+          child: Text(
+            'WIP 1/1',
+            style: TextStyle(
+              color: AppTheme.textMuted,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
+        if (isUrgencyOnTop) ...[
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(
+              color: AppTheme.neonPink.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppTheme.neonPink.withValues(alpha: 0.45)),
+            ),
+            child: Text(
+              'Profondeur : ${stackItems.length}',
+              style: const TextStyle(
+                color: AppTheme.neonPink,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+        const Spacer(),
 
-        // Bouton maître : 🚨 Interruption (PUSH Urgence)
+        // Bouton d'action sobre : Interruption (PUSH)
         InkWell(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(9),
           onTap: () => showPushInterruptionDialog(context, ref),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6.5),
             decoration: BoxDecoration(
-              gradient: AppTheme.urgencyGradient,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.neonPink.withValues(alpha: 0.4),
-                  blurRadius: 14,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+              color: AppTheme.neonPink.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(
+                color: AppTheme.neonPink.withValues(alpha: 0.45),
+              ),
             ),
             child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.priority_high_rounded, size: 16, color: Colors.white),
-                SizedBox(width: 6),
+                Icon(Icons.bolt_rounded, size: 14, color: AppTheme.neonPink),
+                SizedBox(width: 4),
                 Text(
-                  '🚨 Interruption (PUSH)',
+                  'Interruption (PUSH)',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: AppTheme.neonPink,
                     fontWeight: FontWeight.w700,
-                    fontSize: 12.5,
+                    fontSize: 11.5,
                   ),
                 ),
               ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStackPointerPill(int depth, TaskWithMilestones topItem) {
-    final isUrgencyOnTop = topItem.task.status == TaskStackStatus.activeTop.dbValue;
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-          decoration: BoxDecoration(
-            color: isUrgencyOnTop ? AppTheme.neonPink : AppTheme.accentBlue,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: (isUrgencyOnTop ? AppTheme.neonPink : AppTheme.accentBlue)
-                    .withValues(alpha: 0.5),
-                blurRadius: 12,
-              ),
-            ],
-          ),
-          child: Text(
-            isUrgencyOnTop ? 'STACK DEPTH : $depth (URGENCE ACTIVE)' : 'STACK BASE : FOCUS ACTIF',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.5,
             ),
           ),
         ),
@@ -500,794 +439,719 @@ class ActiveStackPanel extends ConsumerWidget {
     WidgetRef ref,
     TaskWithMilestones item,
     FocusTimerState timerState,
+    int stackDepth,
   ) {
     final task = item.task;
-    final taskType = TaskType.fromDb(task.type);
     final isUrgencyTop = task.status == TaskStackStatus.activeTop.dbValue;
     final isTimerRunningOnThis =
         timerState.isRunning && timerState.activeTaskId == task.id;
     final totalSeconds = task.elapsedSeconds +
         (isTimerRunningOnThis ? (timerState.sessionSeconds % 5) : 0);
+    final accent = isUrgencyTop ? AppTheme.neonPink : AppTheme.accentBlue;
 
-    return Padding(
-      padding: const EdgeInsets.only(left: 44),
-      child: Container(
-        decoration: AppTheme.neumorphicCard(
-          color: AppTheme.surfaceCard,
-          radius: 22,
-          glowColor: isUrgencyTop ? AppTheme.neonPink : AppTheme.accentBlue,
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isUrgencyTop
+              ? AppTheme.neonPink.withValues(alpha: 0.45)
+              : AppTheme.borderSubtle,
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(22),
-          child: Stack(
-            children: [
-              // Barre latérale néon verticale (signature visuelle de la maquette Dribbble)
-              Positioned(
-                left: 0,
-                top: 0,
-                bottom: 0,
-                child: Container(
-                  width: 5,
-                  decoration: BoxDecoration(
-                    color: isUrgencyTop ? AppTheme.neonPink : taskType.accentColor,
-                    boxShadow: [
-                      BoxShadow(
-                        color: (isUrgencyTop ? AppTheme.neonPink : taskType.accentColor)
-                            .withValues(alpha: 0.8),
-                        blurRadius: 10,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Fine barre de progression au sommet de la carte (2px)
+          ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+            child: LinearProgressIndicator(
+              value: (item.completionPercent / 100).clamp(0.0, 1.0),
+              minHeight: 3,
+              backgroundColor: AppTheme.surfaceElevated,
+              valueColor: AlwaysStoppedAnimation<Color>(accent),
+            ),
+          ),
 
-              Padding(
-                padding: const EdgeInsets.fromLTRB(22, 18, 18, 18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Ligne supérieure : Statut + Réf AzDO + %
+                Row(
                   children: [
-                    // Ligne supérieure : Badge Type + Ticket Azure DevOps + % de complétion
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: (isUrgencyTop ? AppTheme.neonPink : taskType.accentColor)
-                                .withValues(alpha: 0.16),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: (isUrgencyTop ? AppTheme.neonPink : taskType.accentColor)
-                                  .withValues(alpha: 0.6),
-                            ),
-                          ),
-                          child: Text(
-                            isUrgencyTop
-                                ? '🔥 SOMMET DE PILE (INTERRUPTION EN COURS)'
-                                : '🏗️ SANCTUAIRE — TÂCHE DE FOND DU JOUR',
-                            style: TextStyle(
-                              color: isUrgencyTop ? AppTheme.neonPink : taskType.accentColor,
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w800,
-                            ),
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color: accent,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                    Text(
+                      isUrgencyTop
+                          ? 'INTERRUPTION AU SOMMET'
+                          : 'FOCUS DU JOUR • TÂCHE DE FOND',
+                      style: TextStyle(
+                        color: accent,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                    if (task.externalRef != null &&
+                        task.externalRef!.trim().isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: AppTheme.surfaceElevated,
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                        child: Text(
+                          task.externalRef!,
+                          style: TextStyle(
+                            color: AppTheme.textSecondary,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                        if (task.externalRef != null) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      ),
+                    ],
+                    const Spacer(),
+                    Text(
+                      '${item.completionPercent}% complété',
+                      style: TextStyle(
+                        color: AppTheme.textMuted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
+                // Titre de la tâche active (Typographie claire et aérée)
+                Text(
+                  task.title,
+                  style: TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    height: 1.3,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+
+                // --- Note de reprise mentale (sobre citation à bordure gauche ambre) ---
+                if (task.resumeNote != null &&
+                    task.resumeNote!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 9),
+                    decoration: BoxDecoration(
+                      color: AppTheme.neonAmber.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                      border: const Border(
+                        left: BorderSide(color: AppTheme.neonAmber, width: 3),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Note de reprise mentale',
+                                style: TextStyle(
+                                  color: AppTheme.neonAmber,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                task.resumeNote!,
+                                style: TextStyle(
+                                  color: AppTheme.textPrimary,
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        InkWell(
+                          borderRadius: BorderRadius.circular(6),
+                          onTap: () => ref
+                              .read(taskRepositoryProvider)
+                              .acknowledgeResumeNote(task.id),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: AppTheme.surfaceElevated,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: AppTheme.borderHighlight),
+                              color: AppTheme.neonAmber.withValues(alpha: 0.16),
+                              borderRadius: BorderRadius.circular(6),
                             ),
-                            child: Text(
-                              task.externalRef!,
-                              style: const TextStyle(
-                                color: AppTheme.accentBlue,
+                            child: const Text(
+                              'Repris ✓',
+                              style: TextStyle(
+                                color: AppTheme.neonAmber,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
-                        ],
-                        const Spacer(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppTheme.surfaceElevated,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            '${item.completionPercent}%',
-                            style: TextStyle(
-                              color: AppTheme.textPrimary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                  ),
+                ],
 
-                    // Titre de la tâche active
-                    Text(
-                      task.title,
-                      style: TextStyle(
-                        color: AppTheme.textPrimary,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        height: 1.3,
+                const SizedBox(height: 14),
+
+                // --- Barre Chronomètre Focus + Action de clôture/POP ---
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceInput,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppTheme.borderSubtle),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isTimerRunningOnThis
+                            ? Icons.timer_rounded
+                            : Icons.timer_outlined,
+                        color: isTimerRunningOnThis
+                            ? AppTheme.neonGreen
+                            : AppTheme.textMuted,
+                        size: 17,
                       ),
-                    ),
-
-                    // --- BANNIÈRE DE NOTE DE REPRISE (Affichée en évidence après un POP !) ---
-                    if (task.resumeNote != null && task.resumeNote!.trim().isNotEmpty) ...[
-                      const SizedBox(height: 14),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppTheme.neonAmber.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: AppTheme.neonAmber.withValues(alpha: 0.75),
-                            width: 1.2,
-                          ),
+                      const SizedBox(width: 7),
+                      Text(
+                        _formatDuration(totalSeconds),
+                        style: TextStyle(
+                          color: isTimerRunningOnThis
+                              ? AppTheme.neonGreen
+                              : AppTheme.textPrimary,
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w700,
+                          fontFeatures: const [FontFeature.tabularFigures()],
                         ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Icon(Icons.bookmark_added_rounded,
-                                color: AppTheme.neonAmber, size: 20),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'NOTE DE REPRISE MENTALE (SAUVEGARDÉE AVANT L\'INTERRUPTION) :',
-                                    style: TextStyle(
-                                      color: AppTheme.neonAmber,
-                                      fontSize: 10.5,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    task.resumeNote!,
-                                    style: TextStyle(
-                                      color: AppTheme.textPrimary,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
+                      ),
+                      const SizedBox(width: 10),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(7),
+                        onTap: () => ref
+                            .read(focusTimerProvider.notifier)
+                            .toggleTimer(task.id),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: isTimerRunningOnThis
+                                ? AppTheme.neonAmber.withValues(alpha: 0.15)
+                                : AppTheme.accentBlue.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(7),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                isTimerRunningOnThis
+                                    ? Icons.pause_rounded
+                                    : Icons.play_arrow_rounded,
+                                size: 14,
+                                color: isTimerRunningOnThis
+                                    ? AppTheme.neonAmber
+                                    : AppTheme.accentBlue,
                               ),
-                            ),
-                            TextButton(
-                              onPressed: () => ref
-                                  .read(taskRepositoryProvider)
-                                  .acknowledgeResumeNote(task.id),
-                              child: const Text(
-                                'J\'ai repris le fil ✓',
+                              const SizedBox(width: 4),
+                              Text(
+                                isTimerRunningOnThis ? 'Pause' : 'Focus',
                                 style: TextStyle(
-                                  color: AppTheme.neonAmber,
+                                  color: isTimerRunningOnThis
+                                      ? AppTheme.neonAmber
+                                      : AppTheme.accentBlue,
                                   fontSize: 11.5,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-
-                    const SizedBox(height: 16),
-
-                    // --- BARRE CHRONOMÈTRE FOCUS + BOUTON POP (si urgence) ---
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      decoration: AppTheme.neumorphicInset(radius: 14),
-                      child: Row(
-                        children: [
-                          Icon(
-                            isTimerRunningOnThis
-                                ? Icons.timer_rounded
-                                : Icons.timer_outlined,
-                            color: isTimerRunningOnThis
-                                ? AppTheme.neonGreen
-                                : AppTheme.textSecondary,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            _formatDuration(totalSeconds),
-                            style: TextStyle(
-                              color: isTimerRunningOnThis
-                                  ? AppTheme.neonGreen
-                                  : AppTheme.textPrimary,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              fontFeatures: const [FontFeature.tabularFigures()],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          InkWell(
-                            borderRadius: BorderRadius.circular(10),
-                            onTap: () => ref
-                                .read(focusTimerProvider.notifier)
-                                .toggleTimer(task.id),
-                            child: Container(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                              decoration: BoxDecoration(
-                                color: isTimerRunningOnThis
-                                    ? AppTheme.neonAmber.withValues(alpha: 0.2)
-                                    : AppTheme.accentBlue.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: isTimerRunningOnThis
-                                      ? AppTheme.neonAmber
-                                      : AppTheme.accentBlue,
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    isTimerRunningOnThis
-                                        ? Icons.pause_rounded
-                                        : Icons.play_arrow_rounded,
-                                    size: 16,
-                                    color: isTimerRunningOnThis
-                                        ? AppTheme.neonAmber
-                                        : AppTheme.accentBlue,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    isTimerRunningOnThis
-                                        ? 'Pause Focus'
-                                        : 'Démarrer Focus',
-                                    style: TextStyle(
-                                      color: isTimerRunningOnThis
-                                          ? AppTheme.neonAmber
-                                          : AppTheme.accentBlue,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const Spacer(),
-
-                          // Si c'est une Urgence au sommet : Bouton "✅ Résoudre & Dépiler (POP)"
-                          if (isUrgencyTop)
-                            InkWell(
-                              borderRadius: BorderRadius.circular(11),
-                              onTap: () async {
-                                await ref.read(focusTimerProvider.notifier).pauseTimer();
-                                await ref
-                                    .read(taskRepositoryProvider)
-                                    .popActiveTopTask(task.id);
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 14, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.neonGreen,
-                                  borderRadius: BorderRadius.circular(11),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AppTheme.neonGreen.withValues(alpha: 0.4),
-                                      blurRadius: 12,
-                                      offset: const Offset(0, 3),
-                                    ),
-                                  ],
-                                ),
-                                child: const Row(
-                                  children: [
-                                    Icon(Icons.check_circle_rounded,
-                                        size: 16, color: Colors.black),
-                                    SizedBox(width: 6),
-                                    Text(
-                                      '✅ Résoudre & Dépiler (POP)',
-                                      style: TextStyle(
-                                        color: Colors.black,
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            )
-                          else
-                            // Sinon bouton pour terminer la tâche de fond du jour
-                            TextButton.icon(
-                              onPressed: () async {
-                                await ref.read(focusTimerProvider.notifier).pauseTimer();
-                                await ref
-                                    .read(taskRepositoryProvider)
-                                    .completeTask(task.id);
-                              },
-                              icon: const Icon(Icons.task_alt_rounded,
-                                  size: 16, color: AppTheme.neonGreen),
-                              label: const Text(
-                                'Clôturer Tâche de Fond',
-                                style: TextStyle(
-                                  color: AppTheme.neonGreen,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-
-                    // --- MICRO-JALONS DE 30 MINUTES (Sous-tâches cochables) ---
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'MICRO-JALONS DE 30 MINUTES',
-                          style: TextStyle(
-                            color: AppTheme.textMuted,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.7,
+                            ],
                           ),
                         ),
+                      ),
+                      const Spacer(),
+                      if (isUrgencyTop)
                         InkWell(
                           borderRadius: BorderRadius.circular(8),
-                          onTap: () => _showAddMilestoneDialog(context, ref, task.id),
+                          onTap: () async {
+                            await ref
+                                .read(focusTimerProvider.notifier)
+                                .pauseTimer();
+                            await ref
+                                .read(taskRepositoryProvider)
+                                .popActiveTopTask(task.id);
+                            ref
+                                .read(appNotificationsProvider.notifier)
+                                .pushNotification(
+                                  title:
+                                      '🎯 Urgence dépilée (POP) : ${task.title}',
+                                  body:
+                                      'Votre Tâche de Fond est de retour au premier plan avec sa Note de reprise.',
+                                  type: AppNotificationType.stackPop,
+                                );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 11, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppTheme.neonGreen,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.check_rounded,
+                                    size: 14, color: Colors.black),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Résoudre & POP',
+                                  style: TextStyle(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 11.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      else
+                        InkWell(
+                          borderRadius: BorderRadius.circular(7),
+                          onTap: () async {
+                            await ref
+                                .read(focusTimerProvider.notifier)
+                                .pauseTimer();
+                            await ref
+                                .read(taskRepositoryProvider)
+                                .completeTask(task.id);
+                          },
                           child: const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
                             child: Row(
                               children: [
-                                Icon(Icons.add_rounded,
-                                    size: 15, color: AppTheme.accentBlue),
-                                SizedBox(width: 3),
+                                Icon(Icons.check_circle_outline_rounded,
+                                    size: 15, color: AppTheme.neonGreen),
+                                SizedBox(width: 5),
                                 Text(
-                                  'Ajouter jalon 30m',
+                                  'Terminer',
                                   style: TextStyle(
-                                    color: AppTheme.accentBlue,
+                                    color: AppTheme.neonGreen,
                                     fontSize: 11.5,
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
                               ],
                             ),
                           ),
                         ),
-                      ],
+                    ],
+                  ),
+                ),
+
+                // --- MICRO-JALONS DE 30 MINUTES (Liste épurée style Things 3 / Linear sans boîtes lourdes) ---
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'JALONS DE 30 MINUTES (${item.milestones.where((m) => m.isDone).length}/${item.milestones.length})',
+                      style: TextStyle(
+                        color: AppTheme.textMuted,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.6,
+                      ),
                     ),
-                    const SizedBox(height: 8),
-                    if (item.milestones.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Text(
-                          'Aucun micro-jalon défini. Découpe cette tâche en blocs de 30 min.',
-                          style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
-                        ),
-                      )
-                    else
-                      SyncReorderableList(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        items: item.milestones,
-                        idOf: (m) => 'milestone_${m.id}',
-                        onReordered: (reordered) {
-                          ref
-                              .read(taskRepositoryProvider)
-                              .reorderMicroMilestones(
-                                task.id,
-                                reordered.map((e) => e.id).toList(),
-                              );
-                        },
-                        itemBuilder: (context, m, mIndex) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 7),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(11),
-                              onTap: () => ref
-                                  .read(taskRepositoryProvider)
-                                  .toggleMicroMilestone(m.id, !m.isDone),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 9),
-                                decoration: BoxDecoration(
-                                  color: m.isDone
-                                      ? AppTheme.bgDeep.withValues(alpha: 0.55)
-                                      : AppTheme.surfaceElevated,
-                                  borderRadius: BorderRadius.circular(11),
-                                  border: Border.all(
-                                    color: m.isDone
-                                        ? AppTheme.neonGreen.withValues(alpha: 0.35)
-                                        : AppTheme.borderSubtle,
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    ReorderableDragStartListener(
-                                      index: mIndex,
-                                      child: MouseRegion(
-                                        cursor: SystemMouseCursors.grab,
-                                        child: Padding(
-                                          padding: const EdgeInsets.only(right: 6),
-                                          child: Icon(
-                                            Icons.drag_indicator_rounded,
-                                            size: 16,
-                                            color: AppTheme.textMuted,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    Icon(
-                                      m.isDone
-                                          ? Icons.check_box_rounded
-                                          : Icons.check_box_outline_blank_rounded,
-                                      size: 18,
-                                      color: m.isDone
-                                          ? AppTheme.neonGreen
-                                          : AppTheme.textSecondary,
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Text(
-                                        m.title,
-                                        style: TextStyle(
-                                          color: m.isDone
-                                              ? AppTheme.textMuted
-                                              : AppTheme.textPrimary,
-                                          fontSize: 12.5,
-                                          decoration: m.isDone
-                                              ? TextDecoration.lineThrough
-                                              : null,
-                                        ),
-                                      ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 7, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: AppTheme.surfaceInput,
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        '${m.durationMinutes}m',
-                                        style: TextStyle(
-                                          color: AppTheme.textSecondary,
-                                          fontSize: 10.5,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    InkWell(
-                                      borderRadius: BorderRadius.circular(6),
-                                      onTap: () => ref
-                                          .read(taskRepositoryProvider)
-                                          .deleteMicroMilestone(m.id),
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(3),
-                                        child: Icon(
-                                          Icons.delete_outline_rounded,
-                                          size: 15,
-                                          color: AppTheme.textMuted,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(6),
+                      onTap: () =>
+                          _showAddMilestoneDialog(context, ref, task.id),
+                      child: const Padding(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        child: Row(
+                          children: [
+                            Icon(Icons.add_rounded,
+                                size: 14, color: AppTheme.accentBlue),
+                            SizedBox(width: 2),
+                            Text(
+                              'Ajouter jalon',
+                              style: TextStyle(
+                                color: AppTheme.accentBlue,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                          );
-                        },
+                          ],
+                        ),
                       ),
+                    ),
                   ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 6),
+                if (item.milestones.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Text(
+                      'Découpe cette tâche en sous-étapes de 30 minutes.',
+                      style:
+                          TextStyle(color: AppTheme.textMuted, fontSize: 11.5),
+                    ),
+                  )
+                else
+                  SyncReorderableList(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    items: item.milestones,
+                    idOf: (m) => 'milestone_${m.id}',
+                    onReordered: (reordered) {
+                      ref
+                          .read(taskRepositoryProvider)
+                          .reorderMicroMilestones(
+                            task.id,
+                            reordered.map((e) => e.id).toList(),
+                          );
+                    },
+                    itemBuilder: (context, m, mIndex) {
+                      return InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () => ref
+                            .read(taskRepositoryProvider)
+                            .toggleMicroMilestone(m.id, !m.isDone),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 7.5),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                color: AppTheme.borderSubtle
+                                    .withValues(alpha: 0.55),
+                              ),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              ReorderableDragStartListener(
+                                index: mIndex,
+                                child: MouseRegion(
+                                  cursor: SystemMouseCursors.grab,
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(right: 6),
+                                    child: Icon(
+                                      Icons.drag_indicator_rounded,
+                                      size: 14,
+                                      color: AppTheme.textMuted
+                                          .withValues(alpha: 0.5),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                width: 16,
+                                height: 16,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(4),
+                                  color: m.isDone
+                                      ? AppTheme.neonGreen
+                                      : Colors.transparent,
+                                  border: Border.all(
+                                    color: m.isDone
+                                        ? AppTheme.neonGreen
+                                        : AppTheme.borderHighlight,
+                                    width: 1.3,
+                                  ),
+                                ),
+                                child: m.isDone
+                                    ? const Icon(Icons.check_rounded,
+                                        size: 11, color: Colors.black)
+                                    : null,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  m.title,
+                                  style: TextStyle(
+                                    color: m.isDone
+                                        ? AppTheme.textMuted
+                                        : AppTheme.textPrimary,
+                                    fontSize: 12.5,
+                                    fontWeight: m.isDone
+                                        ? FontWeight.w400
+                                        : FontWeight.w500,
+                                    decoration: m.isDone
+                                        ? TextDecoration.lineThrough
+                                        : null,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                '${m.durationMinutes}m',
+                                style: TextStyle(
+                                  color: AppTheme.textMuted,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              InkWell(
+                                borderRadius: BorderRadius.circular(4),
+                                onTap: () => ref
+                                    .read(taskRepositoryProvider)
+                                    .deleteMicroMilestone(m.id),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(2),
+                                  child: Icon(
+                                    Icons.close_rounded,
+                                    size: 13.5,
+                                    color: AppTheme.textMuted
+                                        .withValues(alpha: 0.6),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
 
-  /// Carte d'une tâche mise en sommeil dans la pile suite à un PUSH d'urgence
+  /// Carte compacte d'une tâche mise en sommeil dans la pile suite à un PUSH d'urgence
   Widget _buildPausedStackCard(
     BuildContext context,
     WidgetRef ref,
     TaskWithMilestones pausedItem,
   ) {
     final task = pausedItem.task;
-    return Padding(
-      padding: const EdgeInsets.only(left: 44),
-      child: Opacity(
-        opacity: 0.85,
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: AppTheme.neumorphicCard(
-            color: AppTheme.surfaceCard,
-            radius: 18,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceCard.withValues(alpha: 0.65),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.borderSubtle),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
+              const Icon(Icons.pause_circle_filled_rounded,
+                  size: 14, color: AppTheme.neonAmber),
+              const SizedBox(width: 6),
+              const Text(
+                'EN PAUSE (ATTENTE POP)',
+                style: TextStyle(
+                  color: AppTheme.neonAmber,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${pausedItem.completionPercent}% • ${_formatDuration(task.elapsedSeconds)}',
+                style: TextStyle(
+                  color: AppTheme.textMuted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            task.title,
+            style: TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (task.resumeNote != null && task.resumeNote!.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              '↳ "${task.resumeNote}"',
+              style: const TextStyle(
+                color: AppTheme.neonAmber,
+                fontSize: 11.5,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Tiroir repliable sobre pour permuter avec les tâches de fond en réserve
+  Widget _buildCollapsibleBacklogSwitcher(
+    BuildContext context,
+    WidgetRef ref,
+    List<TaskWithMilestones> backlogDeepWork,
+  ) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceCard.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.borderSubtle),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () =>
+                setState(() => _showReserveDrawer = !_showReserveDrawer),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppTheme.neonAmber.withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Text(
-                      '⏸️ EN PAUSE DANS LA PILE (ATTENTE POP)',
-                      style: TextStyle(
-                        color: AppTheme.neonAmber,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
+                  Icon(
+                    _showReserveDrawer
+                        ? Icons.keyboard_arrow_down_rounded
+                        : Icons.keyboard_arrow_right_rounded,
+                    size: 16,
+                    color: AppTheme.textSecondary,
                   ),
-                  if (task.externalRef != null) ...[
-                    const SizedBox(width: 8),
-                    Text(
-                      task.externalRef!,
-                      style: TextStyle(
-                        color: AppTheme.textSecondary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                  const Spacer(),
+                  const SizedBox(width: 6),
                   Text(
-                    '${pausedItem.completionPercent}% • ${_formatDuration(task.elapsedSeconds)}',
+                    'Réserve Tâches de Fond (${backlogDeepWork.length})',
                     style: TextStyle(
                       color: AppTheme.textSecondary,
                       fontSize: 11.5,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
+                  const Spacer(),
+                  Text(
+                    _showReserveDrawer ? 'Masquer' : 'Permuter Focus',
+                    style: const TextStyle(
+                      color: AppTheme.accentBlue,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
               ),
-              const SizedBox(height: 8),
-              Text(
-                task.title,
-                style: TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 14.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              if (task.resumeNote != null && task.resumeNote!.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppTheme.surfaceInput,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppTheme.neonAmber.withValues(alpha: 0.45)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.lock_clock_rounded,
-                          size: 16, color: AppTheme.neonAmber),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Note de reprise verrouillée : "${task.resumeNote}"',
-                          style: const TextStyle(
-                            color: AppTheme.neonAmber,
-                            fontSize: 12,
-                            fontStyle: FontStyle.italic,
+            ),
+          ),
+          if (_showReserveDrawer) ...[
+            Divider(height: 1, color: AppTheme.borderSubtle),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+              child: SyncReorderableList(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                items: backlogDeepWork,
+                idOf: (item) => 'reserve_${item.task.id}',
+                onReordered: (reordered) {
+                  ref.read(taskRepositoryProvider).reorderTasks(
+                        reordered.map((e) => e.task.id).toList(),
+                      );
+                },
+                itemBuilder: (context, item, index) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        ReorderableDragStartListener(
+                          index: index,
+                          child: MouseRegion(
+                            cursor: SystemMouseCursors.grab,
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 6),
+                              child: Icon(
+                                Icons.drag_indicator_rounded,
+                                size: 15,
+                                color: AppTheme.textMuted,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBacklogSwitcher(
-    BuildContext context,
-    WidgetRef ref,
-    List<TaskWithMilestones> backlogDeepWork,
-  ) {
-    if (backlogDeepWork.isEmpty) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.only(left: 44),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: AppTheme.neumorphicCard(
-          color: AppTheme.surfaceCard.withValues(alpha: 0.7),
-          radius: 16,
-          isElevated: false,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'RÉSERVE TÂCHES DE FOND (SWITCH WIP = 1 • GLISSER ⠿ POUR ORDONNER)',
-              style: TextStyle(
-                color: AppTheme.textMuted,
-                fontSize: 10.5,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.7,
-              ),
-            ),
-            const SizedBox(height: 8),
-            SyncReorderableList(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              items: backlogDeepWork,
-              idOf: (item) => 'reserve_${item.task.id}',
-              onReordered: (reordered) {
-                ref.read(taskRepositoryProvider).reorderTasks(
-                      reordered.map((e) => e.task.id).toList(),
-                    );
-              },
-              itemBuilder: (context, item, index) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    children: [
-                      ReorderableDragStartListener(
-                        index: index,
-                        child: MouseRegion(
-                          cursor: SystemMouseCursors.grab,
+                        Expanded(
+                          child: Text(
+                            item.task.title,
+                            style: TextStyle(
+                              color: AppTheme.textPrimary,
+                              fontSize: 12,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        InkWell(
+                          borderRadius: BorderRadius.circular(6),
+                          onTap: () => ref
+                              .read(taskRepositoryProvider)
+                              .activateDeepWorkTask(item.task.id),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color:
+                                  AppTheme.accentBlue.withValues(alpha: 0.14),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'Activer',
+                              style: TextStyle(
+                                color: AppTheme.accentBlue,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        InkWell(
+                          borderRadius: BorderRadius.circular(6),
+                          onTap: () => ref
+                              .read(taskRepositoryProvider)
+                              .deleteTask(item.task.id),
                           child: Padding(
-                            padding: const EdgeInsets.only(right: 6),
+                            padding: const EdgeInsets.all(4),
                             child: Icon(
-                              Icons.drag_indicator_rounded,
-                              size: 16,
+                              Icons.close_rounded,
+                              size: 14,
                               color: AppTheme.textMuted,
                             ),
                           ),
                         ),
-                      ),
-                      const Icon(Icons.architecture_rounded,
-                          size: 16, color: AppTheme.neonAmber),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          item.task.title,
-                          style: TextStyle(
-                            color: AppTheme.textSecondary,
-                            fontSize: 12.5,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () => ref
-                            .read(taskRepositoryProvider)
-                            .activateDeepWorkTask(item.task.id),
-                        child: const Text(
-                          'Placer à la base',
-                          style: TextStyle(
-                            color: AppTheme.accentBlue,
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      InkWell(
-                        borderRadius: BorderRadius.circular(6),
-                        onTap: () => ref
-                            .read(taskRepositoryProvider)
-                            .deleteTask(item.task.id),
-                        child: Padding(
-                          padding: const EdgeInsets.all(4),
-                          child: Icon(
-                            Icons.delete_outline_rounded,
-                            size: 15,
-                            color: AppTheme.textMuted,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
+                      ],
+                    ),
+                  );
+                },
+              ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCompletedHistorySection(
-    BuildContext context,
-    WidgetRef ref,
-    List<TaskWithMilestones> completedItems,
-  ) {
-    if (completedItems.isEmpty) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.only(left: 44),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: AppTheme.neumorphicCard(
-          color: AppTheme.surfaceCard.withValues(alpha: 0.7),
-          radius: 16,
-          isElevated: false,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.history_rounded,
-                    size: 15, color: AppTheme.neonGreen),
-                const SizedBox(width: 6),
-                Text(
-                  'BACKLOG RÉALISÉ / DÉJÀ FAIT (${completedItems.length})',
-                  style: TextStyle(
-                    color: AppTheme.textMuted,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.7,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            ...completedItems.map((item) {
-              final taskType = TaskType.fromDb(item.task.type);
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  children: [
-                    Icon(Icons.check_circle_rounded,
-                        size: 15, color: taskType.accentColor),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        item.task.title,
-                        style: TextStyle(
-                          color: AppTheme.textSecondary,
-                          fontSize: 12,
-                          decoration: TextDecoration.lineThrough,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    TextButton.icon(
-                      onPressed: () => ref
-                          .read(taskRepositoryProvider)
-                          .reactivateTask(item.task.id, placeInActiveStack: true),
-                      icon: const Icon(Icons.restore_rounded,
-                          size: 14, color: AppTheme.accentBlue),
-                      label: const Text(
-                        'Rendre actif',
-                        style: TextStyle(
-                          color: AppTheme.accentBlue,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -1300,68 +1164,50 @@ class ActiveStackPanel extends ConsumerWidget {
   ) {
     return Center(
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 460),
+        constraints: const BoxConstraints(maxWidth: 420),
         padding: const EdgeInsets.all(24),
-        decoration: AppTheme.neumorphicCard(radius: 22),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceCard,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppTheme.borderSubtle),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.layers_outlined, size: 42, color: AppTheme.accentBlue),
-            const SizedBox(height: 12),
+            const Icon(Icons.layers_outlined,
+                size: 36, color: AppTheme.accentBlue),
+            const SizedBox(height: 10),
             Text(
-              'La Pile Active est vide',
+              'La Pile Active est libre',
               style: TextStyle(
                 color: AppTheme.textPrimary,
-                fontSize: 16,
+                fontSize: 15,
                 fontWeight: FontWeight.w700,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             Text(
-              'Sélectionne ta Tâche de Fond du Jour (WIP = 1), réactive une tâche déjà faite, ou capture une nouvelle tâche en haut.',
+              'Active une Tâche de Fond ci-dessous ou utilise la barre de commande (Ctrl+K).',
               textAlign: TextAlign.center,
-              style: TextStyle(color: AppTheme.textSecondary, fontSize: 12.5),
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
             ),
             if (backlog.isNotEmpty) ...[
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               ...backlog.map(
                 (b) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.surfaceElevated,
-                      foregroundColor: AppTheme.textPrimary,
-                    ),
-                    onPressed: () => ref
-                        .read(taskRepositoryProvider)
-                        .activateDeepWorkTask(b.task.id),
-                    icon: const Icon(Icons.play_circle_fill_rounded,
-                        color: AppTheme.accentBlue),
-                    label: Text(
-                      'Activer : ${b.task.title}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-            if (completed.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              ...completed.take(3).map(
-                (c) => Padding(
                   padding: const EdgeInsets.only(bottom: 6),
                   child: OutlinedButton.icon(
                     onPressed: () => ref
                         .read(taskRepositoryProvider)
-                        .reactivateTask(c.task.id, placeInActiveStack: true),
-                    icon: const Icon(Icons.restore_rounded,
-                        size: 16, color: AppTheme.neonGreen),
+                        .activateDeepWorkTask(b.task.id),
+                    icon: const Icon(Icons.play_arrow_rounded,
+                        size: 16, color: AppTheme.accentBlue),
                     label: Text(
-                      'Réactiver : ${c.task.title}',
+                      b.task.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: AppTheme.textPrimary, fontSize: 12),
+                      style:
+                          TextStyle(color: AppTheme.textPrimary, fontSize: 12),
                     ),
                   ),
                 ),
@@ -1384,8 +1230,8 @@ class ActiveStackPanel extends ConsumerWidget {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.surfaceCard,
         title: Text(
-          'Nouveau Micro-Jalon (30 min)',
-          style: TextStyle(color: AppTheme.textPrimary, fontSize: 16),
+          'Nouveau Jalon (30 min)',
+          style: TextStyle(color: AppTheme.textPrimary, fontSize: 15.5),
         ),
         content: TextField(
           controller: ctrl,
@@ -1401,7 +1247,8 @@ class ActiveStackPanel extends ConsumerWidget {
             child: const Text('Annuler'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accentBlue),
+            style:
+                ElevatedButton.styleFrom(backgroundColor: AppTheme.accentBlue),
             onPressed: () async {
               if (ctrl.text.trim().isNotEmpty) {
                 await ref

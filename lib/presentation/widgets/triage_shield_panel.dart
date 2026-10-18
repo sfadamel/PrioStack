@@ -3,15 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
 import '../../domain/models/task_enums.dart';
 import '../../domain/repositories/task_repository.dart';
+import '../providers/notification_provider.dart';
 import '../providers/priostack_providers.dart';
 import 'active_stack_panel.dart';
 import 'sync_reorderable_list.dart';
 
-/// Zone 3 (Droite sur PC) : "Triage, Bouclier Manager & Backlog Réalisé" (4 Onglets)
-/// - Onglet 🔥 Urgences : File triée par criticité avec "Prendre maintenant (PUSH)" ou "Déléguer"
-/// - Onglet 🧑‍💻 Assistance : Demandes d'assistance à traiter par lots (Batch)
-/// - Onglet 📤 Délégué : Suivi des tâches confiées à l'équipe
-/// - Onglet ✅ Backlog (Fait) : Historique de tout ce qui a été réalisé avec possibilité de rendre de nouveau actif
+/// Zone 3 (Droite sur PC) : "Triage & Bouclier" épuré (4 Onglets segmentés)
+/// - Urgences : Prendre (PUSH) ou Déléguer
+/// - Assistance : Traitement par lots (Batch)
+/// - Délégué : Suivi des livrables équipe
+/// - Fait : Historique réactivable en 1 clic
 class TriageShieldPanel extends ConsumerStatefulWidget {
   const TriageShieldPanel({super.key});
 
@@ -23,10 +24,10 @@ class _TriageShieldPanelState extends ConsumerState<TriageShieldPanel> {
   int _selectedTabIndex = 0;
 
   static const _tabs = [
-    (TaskType.urgence, '🔥 Urgences'),
-    (TaskType.devBlock, '🧑‍💻 Assistance'),
-    (TaskType.delegated, '📤 Délégué'),
-    (null, '✅ Backlog'),
+    (TaskType.urgence, 'Urgences'),
+    (TaskType.devBlock, 'Assistance'),
+    (TaskType.delegated, 'Délégué'),
+    (null, 'Fait'),
   ];
 
   @override
@@ -43,58 +44,51 @@ class _TriageShieldPanelState extends ConsumerState<TriageShieldPanel> {
     return Container(
       decoration: AppTheme.neumorphicCard(
         color: AppTheme.bgMain,
-        radius: 24,
+        radius: 16,
       ),
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // --- En-tête Bouclier Manager ---
+          // --- En-tête épuré sur 1 seule ligne ---
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Bouclier & Backlog',
-                    style: TextStyle(
-                      color: AppTheme.textPrimary,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Triage, Assistance & Historique réactivable',
-                    style: TextStyle(
-                      color: AppTheme.textSecondary,
-                      fontSize: 11.5,
-                    ),
-                  ),
-                ],
+              const Icon(
+                Icons.shield_outlined,
+                color: AppTheme.accentIndigo,
+                size: 18,
               ),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: AppTheme.neumorphicCard(
-                  color: AppTheme.surfaceElevated,
-                  radius: 12,
-                  isElevated: false,
+              const SizedBox(width: 8),
+              Text(
+                'Triage & Flux',
+                style: TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.3,
                 ),
-                child: const Icon(
-                  Icons.shield_moon_rounded,
-                  color: AppTheme.accentIndigo,
-                  size: 18,
+              ),
+              const Spacer(),
+              Text(
+                'Glisser ⠿ pour trier',
+                style: TextStyle(
+                  color: AppTheme.textMuted,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
 
-          // --- Sélecteur des 4 Onglets (Urgences | Assistance | Délégué | ✅ Backlog) ---
+          // --- Sélecteur segmenté des 4 Onglets (Urgences | Assistance | Délégué | Fait) ---
           Container(
-            padding: const EdgeInsets.all(4),
-            decoration: AppTheme.neumorphicInset(radius: 14),
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceInput,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.borderSubtle),
+            ),
             child: Row(
               children: List.generate(_tabs.length, (index) {
                 final (type, label) = _tabs[index];
@@ -103,27 +97,25 @@ class _TriageShieldPanelState extends ConsumerState<TriageShieldPanel> {
                     ? ref.watch(completedTasksProvider)
                     : ref.watch(triageTasksByTypeProvider(type));
                 final count = countAsync.valueOrNull?.length ?? 0;
-                final badgeColor = type?.accentColor ?? AppTheme.accentBlue;
+                final badgeColor = type?.accentColor ?? AppTheme.neonGreen;
 
                 return Expanded(
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(8),
                     onTap: () => setState(() => _selectedTabIndex = index),
                     child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                      duration: const Duration(milliseconds: 150),
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 7, horizontal: 3),
                       decoration: BoxDecoration(
-                        gradient: isSelected ? AppTheme.primaryGradient : null,
-                        borderRadius: BorderRadius.circular(10),
-                        boxShadow: isSelected
-                            ? [
-                                BoxShadow(
-                                  color: AppTheme.accentBlue.withValues(alpha: 0.35),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ]
-                            : [],
+                        color: isSelected
+                            ? AppTheme.surfaceCard
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                        border: isSelected
+                            ? Border.all(
+                                color: AppTheme.borderHighlight, width: 1)
+                            : null,
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -135,33 +127,38 @@ class _TriageShieldPanelState extends ConsumerState<TriageShieldPanel> {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: isSelected
-                                    ? Colors.white
+                                    ? AppTheme.textPrimary
                                     : AppTheme.textSecondary,
                                 fontSize: 11,
-                                fontWeight:
-                                    isSelected ? FontWeight.w700 : FontWeight.w500,
+                                fontWeight: isSelected
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
                               ),
                             ),
                           ),
-                          const SizedBox(width: 4),
-                          Container(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? Colors.black.withValues(alpha: 0.25)
-                                  : AppTheme.surfaceElevated,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              '$count',
-                              style: TextStyle(
-                                color: isSelected ? Colors.white : badgeColor,
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w800,
+                          if (count > 0) ...[
+                            const SizedBox(width: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 4.5, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? badgeColor.withValues(alpha: 0.16)
+                                    : AppTheme.surfaceElevated,
+                                borderRadius: BorderRadius.circular(5),
+                              ),
+                              child: Text(
+                                '$count',
+                                style: TextStyle(
+                                  color: isSelected
+                                      ? badgeColor
+                                      : AppTheme.textMuted,
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ),
@@ -170,11 +167,7 @@ class _TriageShieldPanelState extends ConsumerState<TriageShieldPanel> {
               }),
             ),
           ),
-          const SizedBox(height: 14),
-
-          // --- Sous-titre contextuel selon l'onglet actif ---
-          _buildTabBanner(activeType),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
 
           // --- Liste des cartes de l'onglet sélectionné ---
           Expanded(
@@ -184,10 +177,11 @@ class _TriageShieldPanelState extends ConsumerState<TriageShieldPanel> {
                   return Center(
                     child: Text(
                       isCompletedBacklogTab
-                          ? 'Aucune tâche terminée dans le Backlog pour le moment.'
+                          ? 'Aucune tâche terminée.'
                           : 'Aucun élément dans ${_tabs[_selectedTabIndex].$2}.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: AppTheme.textMuted, fontSize: 12.5),
+                      style:
+                          TextStyle(color: AppTheme.textMuted, fontSize: 12),
                     ),
                   );
                 }
@@ -203,10 +197,11 @@ class _TriageShieldPanelState extends ConsumerState<TriageShieldPanel> {
                   },
                   itemBuilder: (context, item, index) {
                     return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.only(bottom: 8),
                       child: isCompletedBacklogTab
                           ? _buildCompletedBacklogCard(context, item, index)
-                          : _buildTriageCard(context, item, activeType!, index),
+                          : _buildTriageCard(
+                              context, item, activeType!, index),
                     );
                   },
                 );
@@ -220,60 +215,7 @@ class _TriageShieldPanelState extends ConsumerState<TriageShieldPanel> {
     );
   }
 
-  Widget _buildTabBanner(TaskType? type) {
-    String text;
-    IconData icon;
-    Color color;
-
-    if (type == null) {
-      text = 'Glisser ⠿ pour ordonner • Réactivables en 1 clic vers la File ou la Pile';
-      icon = Icons.history_rounded;
-      color = AppTheme.accentBlue;
-    } else {
-      color = type.accentColor;
-      switch (type) {
-        case TaskType.urgence:
-          text = 'Glisser ⠿ pour ordonner • PUSH sur la pile ou Déléguer';
-          icon = Icons.local_fire_department_rounded;
-          break;
-        case TaskType.devBlock:
-          text = 'Glisser ⠿ pour ordonner • Traite ces sollicitations par lots';
-          icon = Icons.terminal_rounded;
-          break;
-        case TaskType.delegated:
-          text = 'Glisser ⠿ pour ordonner • Suivi des livrables confiés à l\'équipe';
-          icon = Icons.outbox_rounded;
-          break;
-        case TaskType.deepWork:
-          text = '';
-          icon = Icons.work_rounded;
-          break;
-      }
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceCard,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppTheme.borderSubtle),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 7),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(color: AppTheme.textSecondary, fontSize: 11),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Carte du Backlog des éléments déjà réalisés avec actions de réactivation
+  /// Carte épurée du Backlog des éléments déjà réalisés
   Widget _buildCompletedBacklogCard(
     BuildContext context,
     TaskWithMilestones item,
@@ -283,15 +225,15 @@ class _TriageShieldPanelState extends ConsumerState<TriageShieldPanel> {
     final taskType = TaskType.fromDb(task.type);
 
     return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: AppTheme.neumorphicCard(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
         color: AppTheme.surfaceCard,
-        radius: 18,
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: AppTheme.borderSubtle),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // En-tête : Poignée Drag + Badge Type d'origine + Réf AzDO + Statut Terminé + Supprimer
           Row(
             children: [
               ReorderableDragStartListener(
@@ -302,167 +244,88 @@ class _TriageShieldPanelState extends ConsumerState<TriageShieldPanel> {
                     padding: const EdgeInsets.only(right: 6),
                     child: Icon(
                       Icons.drag_indicator_rounded,
-                      size: 18,
-                      color: AppTheme.textMuted,
+                      size: 15,
+                      color: AppTheme.textMuted.withValues(alpha: 0.6),
                     ),
                   ),
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                width: 6,
+                height: 6,
                 decoration: BoxDecoration(
-                  color: taskType.accentColor.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(7),
-                  border: Border.all(color: taskType.accentColor.withValues(alpha: 0.55)),
-                ),
-                child: Text(
-                  taskType.label,
-                  style: TextStyle(
-                    color: taskType.accentColor,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                  ),
+                  color: taskType.accentColor,
+                  shape: BoxShape.circle,
                 ),
               ),
-              if (task.externalRef != null) ...[
+              const SizedBox(width: 6),
+              Text(
+                taskType.label,
+                style: TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (task.externalRef != null &&
+                  task.externalRef!.trim().isNotEmpty) ...[
                 const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppTheme.surfaceElevated,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    task.externalRef!,
-                    style: const TextStyle(
-                      color: AppTheme.accentBlue,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
-                    ),
+                Text(
+                  '• ${task.externalRef!}',
+                  style: TextStyle(
+                    color: AppTheme.textMuted,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
               const Spacer(),
-              const Icon(Icons.check_circle_rounded,
-                  size: 14, color: AppTheme.neonGreen),
-              const SizedBox(width: 4),
-              const Text(
-                'FAIT',
-                style: TextStyle(
-                  color: AppTheme.neonGreen,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(width: 6),
               InkWell(
-                borderRadius: BorderRadius.circular(6),
-                onTap: () => ref.read(taskRepositoryProvider).deleteTask(task.id),
+                borderRadius: BorderRadius.circular(5),
+                onTap: () =>
+                    ref.read(taskRepositoryProvider).deleteTask(task.id),
                 child: Padding(
-                  padding: const EdgeInsets.all(3),
+                  padding: const EdgeInsets.all(2),
                   child: Icon(
-                    Icons.delete_outline_rounded,
-                    size: 16,
-                    color: AppTheme.textMuted,
+                    Icons.close_rounded,
+                    size: 14,
+                    color: AppTheme.textMuted.withValues(alpha: 0.7),
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 9),
-
-          // Titre de la tâche terminée
+          const SizedBox(height: 6),
           Text(
             task.title,
             style: TextStyle(
               color: AppTheme.textPrimary,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              height: 1.3,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w500,
+              height: 1.25,
             ),
           ),
-          if (task.requesterOrAssignee != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              'Contexte / Source : ${task.requesterOrAssignee}',
-              style: TextStyle(
-                color: AppTheme.textSecondary,
-                fontSize: 11,
-              ),
-            ),
-          ],
-          const SizedBox(height: 12),
-
-          // Actions pour rendre de nouveau actif
+          const SizedBox(height: 10),
           Row(
+            mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              // Action 1 : Remettre dans sa file active (ou réserve)
-              Expanded(
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(10),
-                  onTap: () => ref
-                      .read(taskRepositoryProvider)
-                      .reactivateTask(task.id, placeInActiveStack: false),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 7),
-                    decoration: BoxDecoration(
-                      color: AppTheme.surfaceElevated,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppTheme.borderHighlight),
-                    ),
-                    alignment: Alignment.center,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.restore_rounded,
-                            size: 14, color: AppTheme.textPrimary),
-                        const SizedBox(width: 5),
-                        Text(
-                          'Rendre actif (File)',
-                          style: TextStyle(
-                            color: AppTheme.textPrimary,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+              _buildSubtleActionBtn(
+                label: 'Remettre en file',
+                icon: Icons.restore_rounded,
+                color: AppTheme.textSecondary,
+                onTap: () => ref
+                    .read(taskRepositoryProvider)
+                    .reactivateTask(task.id, placeInActiveStack: false),
               ),
-              const SizedBox(width: 8),
-
-              // Action 2 : Remettre directement dans la Pile Active (Focus immédiat)
-              Expanded(
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(10),
-                  onTap: () => ref
-                      .read(taskRepositoryProvider)
-                      .reactivateTask(task.id, placeInActiveStack: true),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 7),
-                    decoration: BoxDecoration(
-                      gradient: AppTheme.primaryGradient,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    alignment: Alignment.center,
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.layers_rounded, size: 14, color: Colors.white),
-                        SizedBox(width: 5),
-                        Text(
-                          'Activer dans la Pile',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+              const SizedBox(width: 6),
+              _buildSubtleActionBtn(
+                label: 'Activer dans la Pile',
+                icon: Icons.layers_rounded,
+                color: AppTheme.accentBlue,
+                isPrimaryTint: true,
+                onTap: () => ref
+                    .read(taskRepositoryProvider)
+                    .reactivateTask(task.id, placeInActiveStack: true),
               ),
             ],
           ),
@@ -480,15 +343,16 @@ class _TriageShieldPanelState extends ConsumerState<TriageShieldPanel> {
     final task = item.task;
 
     return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: AppTheme.neumorphicCard(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
         color: AppTheme.surfaceCard,
-        radius: 18,
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: AppTheme.borderSubtle),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // En-tête de carte : Poignée Drag + Interlocuteur + Ticket Azure DevOps + Supprimer
+          // En-tête : Drag + Pastille initiale + Interlocuteur + Réf AzDO + Supprimer
           Row(
             children: [
               ReorderableDragStartListener(
@@ -499,240 +363,207 @@ class _TriageShieldPanelState extends ConsumerState<TriageShieldPanel> {
                     padding: const EdgeInsets.only(right: 6),
                     child: Icon(
                       Icons.drag_indicator_rounded,
-                      size: 18,
-                      color: AppTheme.textMuted,
+                      size: 15,
+                      color: AppTheme.textMuted.withValues(alpha: 0.6),
                     ),
                   ),
                 ),
               ),
               Container(
-                width: 26,
-                height: 26,
+                width: 20,
+                height: 20,
                 decoration: BoxDecoration(
-                  color: activeType.accentColor.withValues(alpha: 0.2),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: activeType.accentColor.withValues(alpha: 0.6)),
+                  color: activeType.accentColor.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(6),
                 ),
                 alignment: Alignment.center,
                 child: Text(
                   _initials(task.requesterOrAssignee ?? 'P'),
                   style: TextStyle(
                     color: activeType.accentColor,
-                    fontSize: 10.5,
+                    fontSize: 9.5,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 7),
               Expanded(
                 child: Text(
                   task.requesterOrAssignee ?? 'Non assigné',
                   style: TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textSecondary,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              if (task.externalRef != null)
+              if (task.externalRef != null &&
+                  task.externalRef!.trim().isNotEmpty)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 5.5, vertical: 1.5),
                   decoration: BoxDecoration(
                     color: AppTheme.surfaceElevated,
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(5),
                   ),
                   child: Text(
                     task.externalRef!,
-                    style: const TextStyle(
-                      color: AppTheme.accentBlue,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
+                    style: TextStyle(
+                      color: AppTheme.textMuted,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 4),
               InkWell(
-                borderRadius: BorderRadius.circular(6),
-                onTap: () => ref.read(taskRepositoryProvider).deleteTask(task.id),
+                borderRadius: BorderRadius.circular(5),
+                onTap: () =>
+                    ref.read(taskRepositoryProvider).deleteTask(task.id),
                 child: Padding(
-                  padding: const EdgeInsets.all(3),
+                  padding: const EdgeInsets.all(2),
                   child: Icon(
-                    Icons.delete_outline_rounded,
-                    size: 16,
-                    color: AppTheme.textMuted,
+                    Icons.close_rounded,
+                    size: 14,
+                    color: AppTheme.textMuted.withValues(alpha: 0.7),
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 9),
+          const SizedBox(height: 7),
 
           // Sujet / Titre
           Text(
             task.title,
             style: TextStyle(
               color: AppTheme.textPrimary,
-              fontSize: 13,
+              fontSize: 12.5,
               fontWeight: FontWeight.w500,
               height: 1.3,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
 
-          // Barre d'actions selon l'onglet
+          // Actions épurées alignées à droite
           if (activeType == TaskType.urgence)
             Row(
+              mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                Expanded(
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(10),
-                    onTap: () => showPushInterruptionDialog(
-                      context,
-                      ref,
-                      existingUrgencyTaskId: task.id,
-                      existingUrgencyTitle: task.title,
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 7),
-                      decoration: BoxDecoration(
-                        gradient: AppTheme.urgencyGradient,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      alignment: Alignment.center,
-                      child: const Text(
-                        '🚨 Prendre (PUSH)',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                InkWell(
-                  borderRadius: BorderRadius.circular(10),
+                _buildSubtleActionBtn(
+                  label: 'Déléguer',
+                  icon: Icons.outbox_rounded,
+                  color: AppTheme.textSecondary,
                   onTap: () => _showDelegateDialog(context, task.id),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: AppTheme.surfaceElevated,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppTheme.borderHighlight),
-                    ),
-                    child: Text(
-                      '📤 Déléguer',
-                      style: TextStyle(
-                        color: AppTheme.textPrimary,
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
                 ),
-              ],
-            )
-          else if (activeType == TaskType.devBlock)
-            Row(
-              children: [
-                Expanded(
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(10),
-                    onTap: () =>
-                        ref.read(taskRepositoryProvider).completeTask(task.id),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 7),
-                      decoration: BoxDecoration(
-                        color: AppTheme.neonGreen.withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppTheme.neonGreen.withValues(alpha: 0.6)),
-                      ),
-                      alignment: Alignment.center,
-                      child: const Text(
-                        '✓ Traité (Batch)',
-                        style: TextStyle(
-                          color: AppTheme.neonGreen,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                InkWell(
-                  borderRadius: BorderRadius.circular(10),
+                const SizedBox(width: 6),
+                _buildSubtleActionBtn(
+                  label: 'Prendre (PUSH)',
+                  icon: Icons.bolt_rounded,
+                  color: AppTheme.neonPink,
+                  isPrimaryTint: true,
                   onTap: () => showPushInterruptionDialog(
                     context,
                     ref,
                     existingUrgencyTaskId: task.id,
                     existingUrgencyTitle: task.title,
                   ),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: AppTheme.surfaceElevated,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Text(
-                      'PUSH',
-                      style: TextStyle(
-                        color: AppTheme.neonPink,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                ),
+              ],
+            )
+          else if (activeType == TaskType.devBlock)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                _buildSubtleActionBtn(
+                  label: 'PUSH',
+                  icon: Icons.bolt_rounded,
+                  color: AppTheme.neonPink,
+                  onTap: () => showPushInterruptionDialog(
+                    context,
+                    ref,
+                    existingUrgencyTaskId: task.id,
+                    existingUrgencyTitle: task.title,
                   ),
+                ),
+                const SizedBox(width: 6),
+                _buildSubtleActionBtn(
+                  label: 'Traité (Batch)',
+                  icon: Icons.check_rounded,
+                  color: AppTheme.neonGreen,
+                  isPrimaryTint: true,
+                  onTap: () =>
+                      ref.read(taskRepositoryProvider).completeTask(task.id),
                 ),
               ],
             )
           else
-            // Onglet 📤 Délégué / En attente
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    const Icon(Icons.sync_rounded,
-                        size: 13, color: AppTheme.neonPurple),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Visibilité : ${task.visibility.toUpperCase()}',
-                      style: const TextStyle(
-                        color: AppTheme.neonPurple,
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
+                Text(
+                  'Équipe (${task.visibility.toUpperCase()})',
+                  style: TextStyle(
+                    color: AppTheme.textMuted,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-                InkWell(
-                  borderRadius: BorderRadius.circular(9),
+                _buildSubtleActionBtn(
+                  label: 'Reçu ✓',
+                  icon: Icons.check_rounded,
+                  color: AppTheme.neonGreen,
+                  isPrimaryTint: true,
                   onTap: () =>
                       ref.read(taskRepositoryProvider).completeTask(task.id),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppTheme.surfaceElevated,
-                      borderRadius: BorderRadius.circular(9),
-                      border: Border.all(color: AppTheme.borderHighlight),
-                    ),
-                    child: const Text(
-                      ' Validé / Reçu ✓',
-                      style: TextStyle(
-                        color: AppTheme.neonGreen,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
                 ),
               ],
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSubtleActionBtn({
+    required String label,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+    bool isPrimaryTint = false,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(7),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        decoration: BoxDecoration(
+          color: isPrimaryTint
+              ? color.withValues(alpha: 0.14)
+              : AppTheme.surfaceElevated,
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(
+            color: isPrimaryTint
+                ? color.withValues(alpha: 0.4)
+                : AppTheme.borderSubtle,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 12.5, color: color),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -744,8 +575,8 @@ class _TriageShieldPanelState extends ConsumerState<TriageShieldPanel> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.surfaceCard,
         title: Text(
-          '📤 Déléguer à un membre de l\'équipe',
-          style: TextStyle(color: AppTheme.textPrimary, fontSize: 16),
+          'Déléguer à un membre de l\'équipe',
+          style: TextStyle(color: AppTheme.textPrimary, fontSize: 15.5),
         ),
         content: TextField(
           controller: assigneeCtrl,
@@ -762,16 +593,24 @@ class _TriageShieldPanelState extends ConsumerState<TriageShieldPanel> {
             child: const Text('Annuler'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accentIndigo),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.accentIndigo),
             onPressed: () async {
               if (assigneeCtrl.text.trim().isNotEmpty) {
                 await ref
                     .read(taskRepositoryProvider)
                     .delegateTask(taskId, assigneeCtrl.text);
+                ref.read(appNotificationsProvider.notifier).pushNotification(
+                      title: '📤 Tâche déléguée à ${assigneeCtrl.text.trim()}',
+                      body:
+                          'Déplacée dans l\'onglet « Délégué » avec visibilité Équipe (TEAM).',
+                      type: AppNotificationType.delegation,
+                    );
               }
               if (ctx.mounted) Navigator.pop(ctx);
             },
-            child: const Text('Déléguer', style: TextStyle(color: Colors.white)),
+            child:
+                const Text('Déléguer', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

@@ -46,4 +46,4 @@ app.*.map.json
 
 # Local runtime debug logs
 /logs/
-
+/dist/windows/PrioStack_Portable/app/
