@@ -1,9 +1,11 @@
 using System;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
@@ -11,17 +13,18 @@ using System.Windows.Forms;
 [assembly: AssemblyDescription("PrioStack - Cockpit de Gestion de la Charge Mentale & Agenda")]
 [assembly: AssemblyCompany("DamelIT")]
 [assembly: AssemblyProduct("PrioStack")]
-[assembly: AssemblyVersion("1.2.0.0")]
-[assembly: AssemblyFileVersion("1.2.0.0")]
+[assembly: AssemblyVersion("1.2.1.0")]
+[assembly: AssemblyFileVersion("1.2.1.0")]
 
 namespace PrioStackLauncher
 {
     static class Program
     {
-        private static HttpListener _listener;
-        private static bool _running = true;
+        private static TcpListener _tcpServer;
+        private static volatile bool _running = true;
         private static string _wwwRoot;
         private static int _port = 8098;
+        private static Mutex _singleInstanceMutex;
 
         [STAThread]
         static void Main(string[] args)
@@ -33,7 +36,6 @@ namespace PrioStackLauncher
             _wwwRoot = Path.Combine(baseDir, "app");
             if (!Directory.Exists(_wwwRoot))
             {
-                // Fallback if launched directly next to build/web
                 string altRoot = Path.Combine(baseDir, "build", "web");
                 if (Directory.Exists(altRoot))
                 {
@@ -51,49 +53,195 @@ namespace PrioStackLauncher
                 }
             }
 
-            _port = FindAvailablePort(8098);
+            bool createdNew;
+            _singleInstanceMutex = new Mutex(true, "Local\\PrioStackDesktopServerMutex", out createdNew);
+
+            if (!createdNew)
+            {
+                // Server already running in background! Find which port it is listening on and open a window
+                int activePort = FindExistingPrioStackPort(8098);
+                LaunchAppWindow(string.Format("http://127.0.0.1:{0}/", activePort));
+                return;
+            }
+
+            _port = StartTcpServer(8098);
             string url = string.Format("http://127.0.0.1:{0}/", _port);
 
-            Thread serverThread = new Thread(() => StartHttpServer(url));
+            Thread serverThread = new Thread(AcceptLoop);
             serverThread.IsBackground = true;
             serverThread.Start();
 
-            Process appProcess = LaunchAppWindow(url);
-            if (appProcess != null)
+            // Create system tray icon so the server stays alive even when msedge delegates to an existing process
+            using (NotifyIcon trayIcon = new NotifyIcon())
+            {
+                trayIcon.Icon = SystemIcons.Application;
+                trayIcon.Text = string.Format("PrioStack v1.2 (127.0.0.1:{0})", _port);
+                trayIcon.Visible = true;
+
+                ContextMenu menu = new ContextMenu();
+                menu.MenuItems.Add("Ouvrir PrioStack", (s, e) => LaunchAppWindow(url));
+                menu.MenuItems.Add("-");
+                menu.MenuItems.Add("Quitter PrioStack", (s, e) =>
+                {
+                    _running = false;
+                    try { _tcpServer.Stop(); } catch { }
+                    trayIcon.Visible = false;
+                    Application.Exit();
+                });
+                trayIcon.ContextMenu = menu;
+                trayIcon.DoubleClick += (s, e) => LaunchAppWindow(url);
+
+                // Launch the dedicated app window after server is listening
+                LaunchAppWindow(url);
+
+                // Keep WinForms message loop alive
+                Application.Run();
+            }
+        }
+
+        private static int FindExistingPrioStackPort(int startPort)
+        {
+            for (int p = startPort; p < startPort + 30; p++)
             {
                 try
                 {
-                    appProcess.WaitForExit();
+                    using (TcpClient client = new TcpClient())
+                    {
+                        IAsyncResult res = client.BeginConnect(IPAddress.Loopback, p, null, null);
+                        bool success = res.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(150));
+                        if (success && client.Connected)
+                        {
+                            return p;
+                        }
+                    }
                 }
                 catch { }
             }
-            else
-            {
-                // If browser launched asynchronously, keep server alive until user closes tray or for session
-                Thread.Sleep(TimeSpan.FromHours(12));
-            }
-
-            _running = false;
-            try { if (_listener != null) _listener.Stop(); } catch { }
+            return startPort;
         }
 
-        private static int FindAvailablePort(int preferredPort)
+        private static int StartTcpServer(int preferredPort)
         {
             for (int p = preferredPort; p < preferredPort + 50; p++)
             {
                 try
                 {
-                    TcpListener tcp = new TcpListener(IPAddress.Loopback, p);
-                    tcp.Start();
-                    tcp.Stop();
+                    _tcpServer = new TcpListener(IPAddress.Loopback, p);
+                    _tcpServer.Start();
                     return p;
                 }
                 catch { }
             }
-            return preferredPort;
+            _tcpServer = new TcpListener(IPAddress.Loopback, 0);
+            _tcpServer.Start();
+            return ((IPEndPoint)_tcpServer.LocalEndpoint).Port;
         }
 
-        private static Process LaunchAppWindow(string url)
+        private static void AcceptLoop()
+        {
+            while (_running)
+            {
+                try
+                {
+                    Socket clientSocket = _tcpServer.AcceptSocket();
+                    ThreadPool.QueueUserWorkItem(HandleClientSocket, clientSocket);
+                }
+                catch
+                {
+                    if (!_running) break;
+                }
+            }
+        }
+
+        private static void HandleClientSocket(object state)
+        {
+            Socket socket = (Socket)state;
+            try
+            {
+                socket.ReceiveTimeout = 5000;
+                socket.SendTimeout = 10000;
+
+                byte[] buffer = new byte[8192];
+                int received = socket.Receive(buffer);
+                if (received <= 0)
+                {
+                    socket.Close();
+                    return;
+                }
+
+                string requestText = Encoding.ASCII.GetString(buffer, 0, received);
+                string[] lines = requestText.Split(new string[] { "\r\n", "\n" }, StringSplitOptions.None);
+                if (lines.Length == 0)
+                {
+                    socket.Close();
+                    return;
+                }
+
+                string[] firstLineParts = lines[0].Split(' ');
+                if (firstLineParts.Length < 2)
+                {
+                    socket.Close();
+                    return;
+                }
+
+                string rawUrl = firstLineParts[1];
+                int qIndex = rawUrl.IndexOf('?');
+                string urlPath = qIndex >= 0 ? rawUrl.Substring(0, qIndex) : rawUrl;
+                urlPath = Uri.UnescapeDataString(urlPath.TrimStart('/'));
+
+                if (string.IsNullOrEmpty(urlPath))
+                {
+                    urlPath = "index.html";
+                }
+
+                string rootFull = Path.GetFullPath(_wwwRoot);
+                string candidateFull = Path.GetFullPath(Path.Combine(rootFull, urlPath.Replace('/', Path.DirectorySeparatorChar)));
+
+                // Prevent directory traversal & SPA fallback to index.html
+                if (!candidateFull.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase) || !File.Exists(candidateFull))
+                {
+                    // If requesting an unknown file extension, return 404; otherwise SPA index.html
+                    if (Path.HasExtension(candidateFull) && !File.Exists(candidateFull))
+                    {
+                        byte[] notFoundBody = Encoding.UTF8.GetBytes("404 Not Found");
+                        SendHttpResponse(socket, "404 Not Found", "text/plain; charset=utf-8", notFoundBody);
+                        socket.Close();
+                        return;
+                    }
+                    candidateFull = Path.Combine(rootFull, "index.html");
+                }
+
+                byte[] fileBytes = File.ReadAllBytes(candidateFull);
+                string mimeType = GetMimeType(Path.GetExtension(candidateFull));
+                SendHttpResponse(socket, "200 OK", mimeType, fileBytes);
+            }
+            catch { }
+            finally
+            {
+                try { socket.Shutdown(SocketShutdown.Both); } catch { }
+                try { socket.Close(); } catch { }
+            }
+        }
+
+        private static void SendHttpResponse(Socket socket, string status, string contentType, byte[] body)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.AppendFormat("HTTP/1.1 {0}\r\n", status);
+            sb.AppendFormat("Content-Type: {0}\r\n", contentType);
+            sb.AppendFormat("Content-Length: {0}\r\n", body.Length);
+            sb.Append("Cache-Control: no-cache, no-store, must-revalidate\r\n");
+            sb.Append("Access-Control-Allow-Origin: *\r\n");
+            sb.Append("Connection: close\r\n\r\n");
+
+            byte[] headerBytes = Encoding.ASCII.GetBytes(sb.ToString());
+            socket.Send(headerBytes);
+            if (body.Length > 0)
+            {
+                socket.Send(body);
+            }
+        }
+
+        private static void LaunchAppWindow(string url)
         {
             string[] candidates = new string[]
             {
@@ -106,7 +254,7 @@ namespace PrioStackLauncher
             string userDataDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "PrioStack",
-                "UserData"
+                "AppProfile"
             );
             Directory.CreateDirectory(userDataDir);
 
@@ -117,63 +265,17 @@ namespace PrioStackLauncher
                     ProcessStartInfo psi = new ProcessStartInfo();
                     psi.FileName = exe;
                     psi.Arguments = string.Format(
-                        "--app=\"{0}\" --window-size=1480,920 --user-data-dir=\"{1}\"",
+                        "--app=\"{0}\" --window-size=1480,920 --user-data-dir=\"{1}\" --no-first-run --no-default-browser-check",
                         url,
                         userDataDir
                     );
                     psi.UseShellExecute = false;
-                    return Process.Start(psi);
+                    Process.Start(psi);
+                    return;
                 }
             }
 
             Process.Start(url);
-            return null;
-        }
-
-        private static void StartHttpServer(string prefix)
-        {
-            try
-            {
-                _listener = new HttpListener();
-                _listener.Prefixes.Add(prefix);
-                _listener.Start();
-
-                while (_running)
-                {
-                    HttpListenerContext ctx = _listener.GetContext();
-                    ThreadPool.QueueUserWorkItem((state) => HandleRequest((HttpListenerContext)state), ctx);
-                }
-            }
-            catch { }
-        }
-
-        private static void HandleRequest(HttpListenerContext ctx)
-        {
-            try
-            {
-                string reqPath = ctx.Request.Url.AbsolutePath.TrimStart('/');
-                if (string.IsNullOrEmpty(reqPath))
-                {
-                    reqPath = "index.html";
-                }
-
-                string fullPath = Path.GetFullPath(Path.Combine(_wwwRoot, reqPath.Replace('/', Path.DirectorySeparatorChar)));
-                if (!fullPath.StartsWith(Path.GetFullPath(_wwwRoot), StringComparison.OrdinalIgnoreCase) || !File.Exists(fullPath))
-                {
-                    fullPath = Path.Combine(_wwwRoot, "index.html");
-                }
-
-                byte[] bytes = File.ReadAllBytes(fullPath);
-                ctx.Response.ContentType = GetMimeType(Path.GetExtension(fullPath));
-                ctx.Response.ContentLength64 = bytes.Length;
-                ctx.Response.Headers["Cache-Control"] = "no-cache";
-                ctx.Response.OutputStream.Write(bytes, 0, bytes.Length);
-                ctx.Response.OutputStream.Close();
-            }
-            catch
-            {
-                try { ctx.Response.Abort(); } catch { }
-            }
         }
 
         private static string GetMimeType(string ext)
@@ -181,7 +283,8 @@ namespace PrioStackLauncher
             switch (ext.ToLowerInvariant())
             {
                 case ".html": return "text/html; charset=utf-8";
-                case ".js": return "application/javascript; charset=utf-8";
+                case ".js":
+                case ".mjs": return "application/javascript; charset=utf-8";
                 case ".css": return "text/css; charset=utf-8";
                 case ".json": return "application/json; charset=utf-8";
                 case ".wasm": return "application/wasm";
@@ -194,6 +297,7 @@ namespace PrioStackLauncher
                 case ".otf": return "font/otf";
                 case ".woff": return "font/woff";
                 case ".woff2": return "font/woff2";
+                case ".frag": return "application/octet-stream";
                 default: return "application/octet-stream";
             }
         }
