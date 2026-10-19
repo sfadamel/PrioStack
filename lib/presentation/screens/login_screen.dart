@@ -212,7 +212,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   keyboardType: TextInputType.emailAddress,
                   style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
                   decoration: InputDecoration(
-                    hintText: 'admin@priostack.local',
+                    hintText: 'votre.email@domaine.com',
                     prefixIcon: const Icon(Icons.alternate_email_rounded, size: 18),
                     filled: true,
                     fillColor: AppTheme.surfaceInput,
@@ -447,40 +447,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                 ],
-
-                const Divider(height: 28),
-
-                // Info Compte Admin
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppTheme.surfaceElevated,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppTheme.borderSubtle),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.admin_panel_settings_rounded, size: 14, color: AppTheme.neonAmber),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              'Identifiants Administrateur Neon :',
-                              style: TextStyle(color: AppTheme.textPrimary, fontSize: 11, fontWeight: FontWeight.w700),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Email : admin@priostack.local\nPass  : AdminPrio2026!',
-                        style: TextStyle(color: AppTheme.textMuted, fontSize: 10.5, fontFamily: 'monospace'),
-                      ),
-                    ],
-                  ),
-                ),
               ],
             ),
           ),
