@@ -823,6 +823,10 @@ app.post('/api/backup/import', authMiddleware, async (req, res) => {
 });
 
 // Santé & Ping
+app.get('/', (req, res) => {
+  res.send('PrioStack Backend API is running');
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', service: 'PrioStack Neon Cloud API', time: new Date() });
 });

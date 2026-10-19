@@ -49,3 +49,4 @@ app.*.map.json
 /dist/windows/PrioStack_Portable/app/
 **/node_modules/
 backend/.env
+/dist/damel-it/
