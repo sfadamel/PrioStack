@@ -827,6 +827,6 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', service: 'PrioStack Neon Cloud API', time: new Date() });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Serveur API PrioStack en écoute sur le port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Serveur API PrioStack en écoute sur 0.0.0.0:${PORT}`);
 });

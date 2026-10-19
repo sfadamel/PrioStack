@@ -10,8 +10,36 @@ import '../../data/local/memory/web_storage_stub.dart'
 const String kDefaultApiBaseUrl = 'http://localhost:4000/api';
 const String _kTokenStorageKey = 'priostack_auth_jwt_token';
 const String _kUserStorageKey = 'priostack_auth_user_data';
+const String _kApiUrlStorageKey = 'priostack_api_base_url';
 
-final authApiUrlProvider = StateProvider<String>((ref) => kDefaultApiBaseUrl);
+final authApiUrlProvider = StateNotifierProvider<ApiUrlNotifier, String>((ref) {
+  return ApiUrlNotifier();
+});
+
+class ApiUrlNotifier extends StateNotifier<String> {
+  ApiUrlNotifier() : super(_loadInitialUrl());
+
+  static String _loadInitialUrl() {
+    final saved = getStorageItem(_kApiUrlStorageKey);
+    if (saved != null && saved.trim().isNotEmpty) {
+      return saved.trim();
+    }
+    return kDefaultApiBaseUrl;
+  }
+
+  void setApiUrl(String newUrl) {
+    var trimmed = newUrl.trim();
+    if (trimmed.isEmpty) return;
+    if (trimmed.endsWith('/')) {
+      trimmed = trimmed.substring(0, trimmed.length - 1);
+    }
+    if (!trimmed.endsWith('/api')) {
+      trimmed = '$trimmed/api';
+    }
+    state = trimmed;
+    setStorageItem(_kApiUrlStorageKey, trimmed);
+  }
+}
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   final apiUrl = ref.watch(authApiUrlProvider);
