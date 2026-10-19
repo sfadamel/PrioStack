@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/local/memory/web_storage_helper.dart';
 import '../../domain/models/task_enums.dart';
+import '../providers/auth_provider.dart';
 import '../providers/notification_provider.dart';
 import '../providers/priostack_providers.dart';
 import 'notification_center_widgets.dart';
@@ -314,7 +315,7 @@ class _QuickCaptureBarState extends ConsumerState<QuickCaptureBar> {
               ),
               const SizedBox(width: 12),
 
-              // 4. Actions globales épurées (Sauvegarde 💾 + Notifications 🔔 + Thème 🌙/☀️)
+              // 4. Actions globales épurées (Sauvegarde 💾 + Notifications 🔔 + Thème 🌙/☀️ + Profil/Déconnexion 👤)
               if (kIsWeb) ...[
                 _buildBackupMenuButton(context),
                 const SizedBox(width: 6),
@@ -322,6 +323,8 @@ class _QuickCaptureBarState extends ConsumerState<QuickCaptureBar> {
               const NotificationBellButton(),
               const SizedBox(width: 6),
               _buildMinimalThemeButton(),
+              const SizedBox(width: 6),
+              _buildUserProfileButton(context),
             ],
           ),
 
@@ -700,6 +703,112 @@ class _QuickCaptureBarState extends ConsumerState<QuickCaptureBar> {
           isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
           size: 16,
           color: isDark ? AppTheme.neonAmber : AppTheme.accentBlue,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUserProfileButton(BuildContext context) {
+    final authState = ref.watch(authProvider);
+    final user = authState.user;
+    final initials = user != null && user.fullName.isNotEmpty
+        ? user.fullName.trim().split(' ').map((p) => p.isNotEmpty ? p[0] : '').take(2).join().toUpperCase()
+        : 'US';
+
+    return PopupMenuButton<String>(
+      tooltip: user != null ? '${user.fullName} (${user.role})' : 'Mon compte',
+      offset: const Offset(0, 42),
+      color: AppTheme.surfaceCard,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: AppTheme.borderHighlight),
+      ),
+      onSelected: (value) {
+        if (value == 'logout') {
+          ref.read(authProvider.notifier).logout();
+        }
+      },
+      itemBuilder: (ctx) => [
+        PopupMenuItem<String>(
+          enabled: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                user?.fullName ?? 'Utilisateur',
+                style: TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                user?.email ?? '',
+                style: TextStyle(
+                  color: AppTheme.textMuted,
+                  fontSize: 11,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: (user?.isAdmin ?? false)
+                      ? AppTheme.neonAmber.withValues(alpha: 0.16)
+                      : AppTheme.accentBlue.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: Text(
+                  (user?.isAdmin ?? false) ? 'ADMINISTRATEUR NEON' : 'UTILISATEUR CLOUD',
+                  style: TextStyle(
+                    color: (user?.isAdmin ?? false) ? AppTheme.neonAmber : AppTheme.accentBlue,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem<String>(
+          value: 'logout',
+          child: Row(
+            children: [
+              Icon(Icons.logout_rounded, size: 16, color: AppTheme.neonPink),
+              SizedBox(width: 10),
+              Text(
+                'Se déconnecter',
+                style: TextStyle(color: AppTheme.neonPink, fontSize: 12.5, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+      ],
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: (user?.isAdmin ?? false)
+              ? AppTheme.neonAmber.withValues(alpha: 0.18)
+              : AppTheme.accentBlue.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: (user?.isAdmin ?? false)
+                ? AppTheme.neonAmber.withValues(alpha: 0.5)
+                : AppTheme.accentBlue.withValues(alpha: 0.5),
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          initials,
+          style: TextStyle(
+            color: (user?.isAdmin ?? false) ? AppTheme.neonAmber : AppTheme.accentBlue,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
         ),
       ),
     );

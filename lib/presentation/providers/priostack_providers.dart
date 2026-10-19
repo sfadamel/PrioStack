@@ -6,9 +6,11 @@ import '../../core/theme/app_theme.dart';
 import '../../data/local/drift/app_database.dart';
 import '../../data/local/drift/drift_task_repository.dart';
 import '../../data/local/memory/in_memory_task_repository.dart';
+import '../../data/remote/neon_cloud_task_repository.dart';
 import '../../domain/models/calendar_event.dart';
 import '../../domain/models/task_enums.dart';
 import '../../domain/repositories/task_repository.dart';
+import 'auth_provider.dart';
 
 /// Vue principale affichée sur l'écran (Cockpit 3 colonnes vs Calendrier & Agenda complet)
 enum CockpitMainView {
@@ -63,9 +65,20 @@ final appDatabaseProvider = Provider<AppDatabase>((ref) {
 });
 
 /// Injection du contrat abstrait TaskRepository :
-/// - Desktop Windows & Mobile : DriftTaskRepository (SQLite local)
-/// - Web (Chrome / Edge) : InMemoryTaskRepository (exécution immédiate sans Visual Studio C++)
+/// - Si connecté avec un compte Neon Cloud : NeonCloudTaskRepository (Postgres Neon.tech)
+/// - Sinon Web : InMemoryTaskRepository (localStorage)
+/// - Sinon Desktop/Mobile hors-ligne : DriftTaskRepository (SQLite local)
 final taskRepositoryProvider = Provider<TaskRepository>((ref) {
+  final authState = ref.watch(authProvider);
+  final apiUrl = ref.watch(authApiUrlProvider);
+
+  if (authState.isAuthenticated && authState.token != null) {
+    return NeonCloudTaskRepository(
+      baseUrl: apiUrl,
+      getToken: () => authState.token!,
+    );
+  }
+
   if (kIsWeb) {
     return InMemoryTaskRepository();
   }

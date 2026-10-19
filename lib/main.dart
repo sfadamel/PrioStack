@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/logging/app_logger.dart';
 import 'core/theme/app_theme.dart';
+import 'presentation/providers/auth_provider.dart';
 import 'presentation/providers/priostack_providers.dart';
 import 'presentation/screens/cockpit_screen.dart';
+import 'presentation/screens/login_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -71,6 +73,7 @@ class PrioStackApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
+    final authState = ref.watch(authProvider);
 
     return MaterialApp(
       title: 'PrioStack — Architect & Manager Call Stack',
@@ -78,7 +81,13 @@ class PrioStackApp extends ConsumerWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,
-      home: CockpitScreen(key: ValueKey(themeMode)),
+      home: authState.isLoading
+          ? const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            )
+          : (authState.isAuthenticated
+              ? CockpitScreen(key: ValueKey(themeMode))
+              : const LoginScreen()),
     );
   }
 }
