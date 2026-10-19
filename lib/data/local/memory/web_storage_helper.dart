@@ -25,6 +25,117 @@ class WebStorageHelper {
     setStorageItem(_initKey, 'true');
   }
 
+  // --- Sauvegarde / Restauration (Export / Import JSON) ---
+
+  static const String _backupFormat = 'priostack-backup';
+  static const int _backupVersion = 1;
+
+  /// Vrai juste après une restauration, tant que la page n'a pas été rechargée
+  static bool _writesFrozen = false;
+
+  /// Construit le contenu JSON de la sauvegarde à partir du stockage local courant.
+  /// Retourne null s'il n'y a encore aucune donnée enregistrée.
+  static String? buildBackupJson() {
+    if (!kIsWeb) return null;
+    final tasks = getStorageItem(_tasksKey);
+    if (tasks == null || tasks.isEmpty) return null;
+
+    List<dynamic> decodeOrEmpty(String? raw) {
+      if (raw == null || raw.isEmpty) return const [];
+      try {
+        return jsonDecode(raw) as List;
+      } catch (_) {
+        return const [];
+      }
+    }
+
+    final bundle = {
+      'format': _backupFormat,
+      'version': _backupVersion,
+      'exportedAt': DateTime.now().toIso8601String(),
+      'tasks': decodeOrEmpty(tasks),
+      'milestones': decodeOrEmpty(getStorageItem(_milestonesKey)),
+      'morningChecks': decodeOrEmpty(getStorageItem(_checksKey)),
+      'calendarEvents': decodeOrEmpty(getStorageItem(_eventsKey)),
+    };
+    return const JsonEncoder.withIndent('  ').convert(bundle);
+  }
+
+  /// Nom de fichier horodaté pour la sauvegarde (ex: priostack-sauvegarde-2026-10-19.json)
+  static String backupFileName() {
+    final d = DateTime.now();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return 'priostack-sauvegarde-${d.year}-${two(d.month)}-${two(d.day)}.json';
+  }
+
+  /// Valide puis restaure une sauvegarde. Retourne null si OK, sinon le message d'erreur.
+  /// Les données actuelles ne sont écrasées qu'après validation complète du fichier.
+  static String? restoreFromBackupJson(String raw) {
+    if (!kIsWeb) return 'La restauration est disponible uniquement sur la version Web.';
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic> || decoded['format'] != _backupFormat) {
+        return 'Ce fichier n\'est pas une sauvegarde PrioStack valide.';
+      }
+      final version = decoded['version'];
+      if (version is! int || version > _backupVersion) {
+        return 'Version de sauvegarde non supportée ($version).';
+      }
+
+      final tasks = decoded['tasks'];
+      final milestones = decoded['milestones'];
+      final checks = decoded['morningChecks'];
+      final events = decoded['calendarEvents'];
+      if (tasks is! List || milestones is! List || checks is! List || events is! List) {
+        return 'Sauvegarde incomplète ou corrompue.';
+      }
+
+      // Validation à blanc : on reconstruit chaque entité pour détecter toute erreur avant d'écraser.
+      for (final t in tasks) {
+        _mapToTask(Map<String, dynamic>.from(t as Map));
+      }
+      for (final m in milestones) {
+        _mapToMilestone(Map<String, dynamic>.from(m as Map));
+      }
+      for (final c in checks) {
+        _mapToCheck(Map<String, dynamic>.from(c as Map));
+      }
+      for (final e in events) {
+        _mapToEvent(Map<String, dynamic>.from(e as Map));
+      }
+
+      setStorageItem(_tasksKey, jsonEncode(tasks));
+      setStorageItem(_milestonesKey, jsonEncode(milestones));
+      setStorageItem(_checksKey, jsonEncode(checks));
+      setStorageItem(_eventsKey, jsonEncode(events));
+      markInitialized();
+      // Gèle toute écriture ultérieure : la page va être rechargée avec les données importées.
+      _writesFrozen = true;
+      return null;
+    } catch (e) {
+      return 'Fichier illisible : $e';
+    }
+  }
+
+  /// Déclenche le téléchargement de la sauvegarde. Retourne false s'il n'y a rien à exporter.
+  static bool exportBackup() {
+    final json = buildBackupJson();
+    if (json == null) return false;
+    downloadTextFile(backupFileName(), json);
+    return true;
+  }
+
+  /// Ouvre le sélecteur de fichier, restaure la sauvegarde puis recharge la page.
+  /// Retourne null si annulé ou OK (la page se recharge), sinon un message d'erreur.
+  static Future<String?> importBackup() async {
+    final raw = await pickTextFile();
+    if (raw == null) return null;
+    final error = restoreFromBackupJson(raw);
+    if (error != null) return error;
+    reloadPage();
+    return null;
+  }
+
   // --- Sauvegarde ---
 
   static void saveAll({
@@ -33,7 +144,7 @@ class WebStorageHelper {
     required List<MorningCheckItem> morningChecks,
     required List<CalendarEventItem> calendarEvents,
   }) {
-    if (!kIsWeb) return;
+    if (!kIsWeb || _writesFrozen) return;
     try {
       final tasksJson = jsonEncode(tasks.map(_taskToMap).toList());
       final milestonesJson = jsonEncode(milestones.map(_milestoneToMap).toList());

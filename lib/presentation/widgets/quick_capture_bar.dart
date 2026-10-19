@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
+import '../../data/local/memory/web_storage_helper.dart';
 import '../../domain/models/task_enums.dart';
 import '../providers/notification_provider.dart';
 import '../providers/priostack_providers.dart';
@@ -145,41 +147,44 @@ class _QuickCaptureBarState extends ConsumerState<QuickCaptureBar> {
                   ),
                 ],
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 8),
 
               // 2. Commutateur de vue segmenté (Cockpit | Calendrier)
-              Container(
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  color: AppTheme.bgDeep,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppTheme.borderSubtle),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildViewSegment(
-                      label: 'Cockpit',
-                      icon: Icons.dashboard_customize_outlined,
-                      isActive: currentView == CockpitMainView.cockpit,
-                      onTap: () => ref
-                          .read(cockpitMainViewProvider.notifier)
-                          .setView(CockpitMainView.cockpit),
-                    ),
-                    const SizedBox(width: 2),
-                    _buildViewSegment(
-                      label: 'Calendrier',
-                      icon: Icons.calendar_today_rounded,
-                      badgeCount: todayRemainingCount,
-                      isActive: currentView == CockpitMainView.calendar,
-                      onTap: () => ref
-                          .read(cockpitMainViewProvider.notifier)
-                          .setView(CockpitMainView.calendar),
-                    ),
-                  ],
+              Flexible(
+                flex: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: AppTheme.bgDeep,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppTheme.borderSubtle),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildViewSegment(
+                        label: 'Cockpit',
+                        icon: Icons.dashboard_customize_outlined,
+                        isActive: currentView == CockpitMainView.cockpit,
+                        onTap: () => ref
+                            .read(cockpitMainViewProvider.notifier)
+                            .setView(CockpitMainView.cockpit),
+                      ),
+                      const SizedBox(width: 2),
+                      _buildViewSegment(
+                        label: 'Calendrier',
+                        icon: Icons.calendar_today_rounded,
+                        badgeCount: todayRemainingCount,
+                        isActive: currentView == CockpitMainView.calendar,
+                        onTap: () => ref
+                            .read(cockpitMainViewProvider.notifier)
+                            .setView(CockpitMainView.calendar),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 8),
 
               // 3. Command Bar Centrale (Style Raycast / Linear)
               Expanded(
@@ -309,7 +314,11 @@ class _QuickCaptureBarState extends ConsumerState<QuickCaptureBar> {
               ),
               const SizedBox(width: 12),
 
-              // 4. Actions globales épurées (Notifications 🔔 + Thème 🌙/☀️)
+              // 4. Actions globales épurées (Sauvegarde 💾 + Notifications 🔔 + Thème 🌙/☀️)
+              if (kIsWeb) ...[
+                _buildBackupMenuButton(context),
+                const SizedBox(width: 6),
+              ],
               const NotificationBellButton(),
               const SizedBox(width: 6),
               _buildMinimalThemeButton(),
@@ -545,6 +554,131 @@ class _QuickCaptureBarState extends ConsumerState<QuickCaptureBar> {
         ),
       ),
     );
+  }
+
+  Widget _buildBackupMenuButton(BuildContext context) {
+    return PopupMenuButton<String>(
+      tooltip: 'Sauvegarde des données',
+      offset: const Offset(0, 42),
+      color: AppTheme.surfaceCard,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: AppTheme.borderHighlight),
+      ),
+      onSelected: (value) {
+        if (value == 'export') {
+          _handleExport(context);
+        } else if (value == 'import') {
+          _handleImport(context);
+        }
+      },
+      itemBuilder: (ctx) => [
+        PopupMenuItem<String>(
+          value: 'export',
+          child: Row(
+            children: [
+              const Icon(Icons.download_rounded,
+                  size: 16, color: AppTheme.accentBlue),
+              const SizedBox(width: 10),
+              Text(
+                'Exporter mes données (.json)',
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 12.5),
+              ),
+            ],
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'import',
+          child: Row(
+            children: [
+              const Icon(Icons.upload_rounded,
+                  size: 16, color: AppTheme.neonAmber),
+              const SizedBox(width: 10),
+              Text(
+                'Importer une sauvegarde…',
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 12.5),
+              ),
+            ],
+          ),
+        ),
+      ],
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: AppTheme.bgDeep,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppTheme.borderSubtle),
+        ),
+        child: Icon(
+          Icons.save_alt_rounded,
+          size: 16,
+          color: AppTheme.textSecondary,
+        ),
+      ),
+    );
+  }
+
+  void _showBackupMessage(BuildContext context, String message,
+      {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? AppTheme.neonPink : AppTheme.neonGreen,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _handleExport(BuildContext context) {
+    final ok = WebStorageHelper.exportBackup();
+    _showBackupMessage(
+      context,
+      ok
+          ? 'Sauvegarde téléchargée : ${WebStorageHelper.backupFileName()}'
+          : 'Aucune donnée à exporter pour le moment.',
+      isError: !ok,
+    );
+  }
+
+  Future<void> _handleImport(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surfaceCard,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: AppTheme.borderHighlight),
+        ),
+        title: Text(
+          'Importer une sauvegarde ?',
+          style: TextStyle(color: AppTheme.textPrimary, fontSize: 16),
+        ),
+        content: Text(
+          'Les données actuelles de ce navigateur seront REMPLACÉES par celles du fichier. '
+          'Pensez à exporter d\'abord si vous voulez les conserver.',
+          style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.neonAmber),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Choisir un fichier',
+                style: TextStyle(color: Colors.black)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final error = await WebStorageHelper.importBackup();
+    if (error != null && context.mounted) {
+      _showBackupMessage(context, error, isError: true);
+    }
   }
 
   Widget _buildMinimalThemeButton() {
