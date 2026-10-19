@@ -493,4 +493,41 @@ class NeonCloudTaskRepository implements TaskRepository {
   ]) async {
     return [];
   }
+
+  @override
+  Future<String?> exportBackupJson() async {
+    try {
+      final resp = await http.get(Uri.parse('$baseUrl/backup/export'), headers: _headers);
+      if (resp.statusCode == 200) {
+        return resp.body;
+      }
+    } catch (e) {
+      // ignore error
+    }
+    return null;
+  }
+
+  @override
+  Future<String?> importBackupJson(String rawJson) async {
+    try {
+      final resp = await http.post(
+        Uri.parse('$baseUrl/backup/import'),
+        headers: _headers,
+        body: rawJson,
+      );
+      if (resp.statusCode == 200) {
+        _notify();
+        return null;
+      } else {
+        try {
+          final errBody = jsonDecode(resp.body);
+          return errBody['error'] ?? 'Échec lors de l\'importation (${resp.statusCode})';
+        } catch (_) {
+          return 'Erreur serveur lors de l\'importation (${resp.statusCode})';
+        }
+      }
+    } catch (e) {
+      return 'Erreur de connexion lors de l\'importation : $e';
+    }
+  }
 }

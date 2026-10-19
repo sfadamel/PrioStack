@@ -1291,6 +1291,35 @@ class InMemoryTaskRepository implements TaskRepository {
     }
     return newlyCompleted;
   }
+
+  @override
+  Future<String?> exportBackupJson() async {
+    return WebStorageHelper.buildBackupJson();
+  }
+
+  @override
+  Future<String?> importBackupJson(String rawJson) async {
+    final err = WebStorageHelper.restoreFromBackupJson(rawJson);
+    if (err != null) return err;
+
+    _tasks.clear();
+    _milestones.clear();
+    _morningChecks.clear();
+    _calendarEvents.clear();
+
+    final savedTasks = WebStorageHelper.loadTasks();
+    final savedMilestones = WebStorageHelper.loadMilestones();
+    final savedChecks = WebStorageHelper.loadMorningChecks();
+    final savedEvents = WebStorageHelper.loadCalendarEvents();
+
+    if (savedTasks != null) _tasks.addAll(savedTasks);
+    if (savedMilestones != null) _milestones.addAll(savedMilestones);
+    if (savedChecks != null) _morningChecks.addAll(savedChecks);
+    if (savedEvents != null) _calendarEvents.addAll(savedEvents);
+
+    _notify();
+    return null;
+  }
 }
 
 

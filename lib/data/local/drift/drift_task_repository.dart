@@ -1036,6 +1036,12 @@ class DriftTaskRepository implements TaskRepository {
         .map((e) => e.copyWith(isCompleted: true, updatedAt: now))
         .toList();
   }
+
+  @override
+  Future<String?> exportBackupJson() async => null;
+
+  @override
+  Future<String?> importBackupJson(String rawJson) async => null;
 }
 
 

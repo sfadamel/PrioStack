@@ -526,6 +526,298 @@ app.delete('/api/calendar-events/:id', authMiddleware, async (req, res) => {
   }
 });
 
+// --- 5. ROUTES SAUVEGARDE & RESTAURATION JSON (EXPORT / IMPORT) ---
+
+// Exporter les données de l'utilisateur au format standard PrioStack
+app.get('/api/backup/export', authMiddleware, async (req, res) => {
+  try {
+    const tasksRes = await pool.query(
+      `SELECT * FROM tasks WHERE user_id = $1 AND deleted_at IS NULL ORDER BY stack_order ASC, created_at ASC`,
+      [req.user.id]
+    );
+    const milestonesRes = await pool.query(
+      `SELECT * FROM micro_milestones WHERE user_id = $1 AND deleted_at IS NULL ORDER BY sort_order ASC, created_at ASC`,
+      [req.user.id]
+    );
+    const checksRes = await pool.query(
+      `SELECT * FROM morning_checks WHERE user_id = $1 AND deleted_at IS NULL ORDER BY sort_order ASC, created_at ASC`,
+      [req.user.id]
+    );
+    const eventsRes = await pool.query(
+      `SELECT * FROM calendar_events WHERE user_id = $1 AND deleted_at IS NULL ORDER BY start_time ASC`,
+      [req.user.id]
+    );
+
+    const tasks = tasksRes.rows.map(t => ({
+      id: t.id,
+      userId: t.user_id,
+      workspaceId: 'wks_damelit_arch',
+      visibility: t.visibility || 'private',
+      syncStatus: 'synced',
+      createdAt: t.created_at ? new Date(t.created_at).toISOString() : new Date().toISOString(),
+      updatedAt: t.updated_at ? new Date(t.updated_at).toISOString() : new Date().toISOString(),
+      deletedAt: t.deleted_at ? new Date(t.deleted_at).toISOString() : null,
+      title: t.title,
+      type: t.type,
+      status: t.status,
+      criticality: t.criticality,
+      externalRef: t.external_ref,
+      requesterOrAssignee: t.requester_or_assignee,
+      resumeNote: t.resume_note,
+      stackOrder: t.stack_order,
+      elapsedSeconds: t.elapsed_seconds,
+      interruptionCount: t.interruption_count,
+    }));
+
+    const milestones = milestonesRes.rows.map(m => ({
+      id: m.id,
+      taskId: m.task_id,
+      userId: m.user_id,
+      workspaceId: 'wks_damelit_arch',
+      visibility: 'private',
+      syncStatus: 'synced',
+      createdAt: m.created_at ? new Date(m.created_at).toISOString() : new Date().toISOString(),
+      updatedAt: m.updated_at ? new Date(m.updated_at).toISOString() : new Date().toISOString(),
+      deletedAt: m.deleted_at ? new Date(m.deleted_at).toISOString() : null,
+      title: m.title,
+      durationMinutes: m.duration_minutes,
+      isDone: m.is_done,
+      sortOrder: m.sort_order,
+    }));
+
+    const morningChecks = checksRes.rows.map(c => ({
+      id: c.id,
+      userId: c.user_id,
+      workspaceId: 'wks_damelit_arch',
+      visibility: 'private',
+      syncStatus: 'synced',
+      createdAt: c.created_at ? new Date(c.created_at).toISOString() : new Date().toISOString(),
+      updatedAt: c.updated_at ? new Date(c.updated_at).toISOString() : new Date().toISOString(),
+      deletedAt: c.deleted_at ? new Date(c.deleted_at).toISOString() : null,
+      title: c.title,
+      category: c.category,
+      isChecked: c.is_checked,
+      sortOrder: c.sort_order,
+      lastResetAt: c.last_reset_at ? new Date(c.last_reset_at).toISOString() : null,
+    }));
+
+    const calendarEvents = eventsRes.rows.map(e => ({
+      id: e.id,
+      userId: e.user_id,
+      workspaceId: 'wks_damelit_arch',
+      visibility: e.visibility || 'team',
+      syncStatus: 'synced',
+      createdAt: e.created_at ? new Date(e.created_at).toISOString() : new Date().toISOString(),
+      updatedAt: e.updated_at ? new Date(e.updated_at).toISOString() : new Date().toISOString(),
+      deletedAt: e.deleted_at ? new Date(e.deleted_at).toISOString() : null,
+      title: e.title,
+      category: e.category,
+      startTime: e.start_time ? new Date(e.start_time).toISOString() : new Date().toISOString(),
+      endTime: e.end_time ? new Date(e.end_time).toISOString() : new Date().toISOString(),
+      participantsOrLocation: e.participants_or_location,
+      externalRef: e.external_ref,
+      notes: e.notes,
+      isCompleted: e.is_completed,
+      linkedTaskId: e.linked_task_id,
+    }));
+
+    const backup = {
+      format: 'priostack-backup',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      tasks,
+      milestones,
+      morningChecks,
+      calendarEvents,
+    };
+
+    res.json(backup);
+  } catch (err) {
+    console.error('Erreur export backup:', err);
+    res.status(500).json({ error: 'Erreur lors de l\'exportation de la sauvegarde' });
+  }
+});
+
+// Importer et restaurer les données dans l'espace Neon de l'utilisateur
+app.post('/api/backup/import', authMiddleware, async (req, res) => {
+  const payload = req.body;
+  if (!payload || typeof payload !== 'object') {
+    return res.status(400).json({ error: 'Fichier ou corps de requête invalide.' });
+  }
+
+  const tasks = Array.isArray(payload.tasks) ? payload.tasks : [];
+  const milestones = Array.isArray(payload.milestones) ? payload.milestones : [];
+  const morningChecks = Array.isArray(payload.morningChecks) ? payload.morningChecks : (Array.isArray(payload.morning_checks) ? payload.morning_checks : []);
+  const calendarEvents = Array.isArray(payload.calendarEvents) ? payload.calendarEvents : (Array.isArray(payload.calendar_events) ? payload.calendar_events : []);
+
+  const client = await pool.connect();
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const crypto = require('crypto');
+
+  try {
+    await client.query('BEGIN');
+
+    // Nettoyage préalable des données existantes de l'utilisateur
+    await client.query('DELETE FROM micro_milestones WHERE user_id = $1', [req.user.id]);
+    await client.query('DELETE FROM calendar_events WHERE user_id = $1', [req.user.id]);
+    await client.query('DELETE FROM tasks WHERE user_id = $1', [req.user.id]);
+    await client.query('DELETE FROM morning_checks WHERE user_id = $1', [req.user.id]);
+
+    const taskIdMap = {};
+
+    // 1. Tâches
+    for (const t of tasks) {
+      const origId = t.id || t.taskId;
+      const targetId = (origId && uuidRegex.test(origId)) ? origId : crypto.randomUUID();
+      if (origId) taskIdMap[origId] = targetId;
+
+      await client.query(
+        `INSERT INTO tasks (id, user_id, title, type, status, criticality, external_ref, requester_or_assignee, resume_note, stack_order, elapsed_seconds, interruption_count, visibility)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+         ON CONFLICT (id) DO UPDATE SET
+           title = EXCLUDED.title,
+           type = EXCLUDED.type,
+           status = EXCLUDED.status,
+           criticality = EXCLUDED.criticality,
+           external_ref = EXCLUDED.external_ref,
+           requester_or_assignee = EXCLUDED.requester_or_assignee,
+           resume_note = EXCLUDED.resume_note,
+           stack_order = EXCLUDED.stack_order,
+           elapsed_seconds = EXCLUDED.elapsed_seconds,
+           interruption_count = EXCLUDED.interruption_count,
+           visibility = EXCLUDED.visibility,
+           deleted_at = NULL,
+           updated_at = NOW()`,
+        [
+          targetId,
+          req.user.id,
+          t.title || 'Sans titre',
+          t.type || 'deep_work',
+          t.status || 'backlog',
+          t.criticality ?? 2,
+          t.externalRef || t.external_ref || null,
+          t.requesterOrAssignee || t.requester_or_assignee || null,
+          t.resumeNote || t.resume_note || null,
+          t.stackOrder ?? t.stack_order ?? 0,
+          t.elapsedSeconds ?? t.elapsed_seconds ?? 0,
+          t.interruptionCount ?? t.interruption_count ?? 0,
+          t.visibility || 'private'
+        ]
+      );
+    }
+
+    // 2. Micro-jalons
+    for (const m of milestones) {
+      const origTaskId = m.taskId || m.task_id;
+      const mappedTaskId = taskIdMap[origTaskId] || (origTaskId && uuidRegex.test(origTaskId) ? origTaskId : null);
+      if (!mappedTaskId) continue;
+
+      const mId = (m.id && uuidRegex.test(m.id)) ? m.id : crypto.randomUUID();
+      await client.query(
+        `INSERT INTO micro_milestones (id, task_id, user_id, title, duration_minutes, is_done, sort_order)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (id) DO UPDATE SET
+           title = EXCLUDED.title,
+           duration_minutes = EXCLUDED.duration_minutes,
+           is_done = EXCLUDED.is_done,
+           sort_order = EXCLUDED.sort_order,
+           deleted_at = NULL,
+           updated_at = NOW()`,
+        [
+          mId,
+          mappedTaskId,
+          req.user.id,
+          m.title || 'Micro-jalon',
+          m.durationMinutes ?? m.duration_minutes ?? 30,
+          Boolean(m.isDone ?? m.is_done),
+          m.sortOrder ?? m.sort_order ?? 0
+        ]
+      );
+    }
+
+    // 3. Routines Morning Checks
+    for (const c of morningChecks) {
+      const cId = (c.id && uuidRegex.test(c.id)) ? c.id : crypto.randomUUID();
+      await client.query(
+        `INSERT INTO morning_checks (id, user_id, title, category, is_checked, sort_order)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (id) DO UPDATE SET
+           title = EXCLUDED.title,
+           category = EXCLUDED.category,
+           is_checked = EXCLUDED.is_checked,
+           sort_order = EXCLUDED.sort_order,
+           deleted_at = NULL,
+           updated_at = NOW()`,
+        [
+          cId,
+          req.user.id,
+          c.title || 'Routine',
+          c.category || 'Infra & Ops',
+          Boolean(c.isChecked ?? c.is_checked),
+          c.sortOrder ?? c.sort_order ?? 0
+        ]
+      );
+    }
+
+    // 4. Événements Calendrier
+    for (const e of calendarEvents) {
+      const eId = (e.id && uuidRegex.test(e.id)) ? e.id : crypto.randomUUID();
+      const linkedTaskId = e.linkedTaskId || e.linked_task_id;
+      const mappedLinkedTaskId = taskIdMap[linkedTaskId] || (linkedTaskId && uuidRegex.test(linkedTaskId) ? linkedTaskId : null);
+
+      await client.query(
+        `INSERT INTO calendar_events (id, user_id, title, category, start_time, end_time, participants_or_location, external_ref, notes, is_completed, linked_task_id, visibility)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         ON CONFLICT (id) DO UPDATE SET
+           title = EXCLUDED.title,
+           category = EXCLUDED.category,
+           start_time = EXCLUDED.start_time,
+           end_time = EXCLUDED.end_time,
+           participants_or_location = EXCLUDED.participants_or_location,
+           external_ref = EXCLUDED.external_ref,
+           notes = EXCLUDED.notes,
+           is_completed = EXCLUDED.is_completed,
+           linked_task_id = EXCLUDED.linked_task_id,
+           visibility = EXCLUDED.visibility,
+           deleted_at = NULL,
+           updated_at = NOW()`,
+        [
+          eId,
+          req.user.id,
+          e.title || 'Événement',
+          e.category || 'meeting',
+          e.startTime || e.start_time || new Date().toISOString(),
+          e.endTime || e.end_time || new Date(Date.now() + 3600000).toISOString(),
+          e.participantsOrLocation || e.participants_or_location || null,
+          e.externalRef || e.external_ref || null,
+          e.notes || null,
+          Boolean(e.isCompleted ?? e.is_completed),
+          mappedLinkedTaskId,
+          e.visibility || 'team'
+        ]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    res.json({
+      success: true,
+      imported: {
+        tasks: tasks.length,
+        milestones: milestones.length,
+        morningChecks: morningChecks.length,
+        calendarEvents: calendarEvents.length
+      }
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Erreur import backup:', err);
+    res.status(500).json({ error: 'Erreur lors de l\'importation : ' + err.message });
+  } finally {
+    client.release();
+  }
+});
+
 // Santé & Ping
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', service: 'PrioStack Neon Cloud API', time: new Date() });

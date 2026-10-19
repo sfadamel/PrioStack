@@ -183,5 +183,13 @@ abstract class TaskRepository {
   Future<List<CalendarEventItem>> autoCompletePastCalendarEvents([
     DateTime? nowOverride,
   ]);
+
+  /// Exporte l'intégralité des données en format JSON de sauvegarde standard PrioStack.
+  /// Retourne la chaîne JSON ou null si aucune donnée.
+  Future<String?> exportBackupJson() async => null;
+
+  /// Importe et restaure les données depuis une chaîne JSON.
+  /// Retourne null si succès, sinon le message d'erreur.
+  Future<String?> importBackupJson(String rawJson) async => null;
 }
 

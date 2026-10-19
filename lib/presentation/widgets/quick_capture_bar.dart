@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/local/memory/web_storage_helper.dart';
+import '../../data/local/memory/web_storage_stub.dart'
+    if (dart.library.html) '../../data/local/memory/web_storage_html.dart';
 import '../../domain/models/task_enums.dart';
 import '../providers/auth_provider.dart';
 import '../providers/notification_provider.dart';
@@ -633,15 +635,29 @@ class _QuickCaptureBarState extends ConsumerState<QuickCaptureBar> {
     );
   }
 
-  void _handleExport(BuildContext context) {
-    final ok = WebStorageHelper.exportBackup();
-    _showBackupMessage(
-      context,
-      ok
-          ? 'Sauvegarde téléchargée : ${WebStorageHelper.backupFileName()}'
-          : 'Aucune donnée à exporter pour le moment.',
-      isError: !ok,
-    );
+  Future<void> _handleExport(BuildContext context) async {
+    final repo = ref.read(taskRepositoryProvider);
+    final jsonStr = await repo.exportBackupJson();
+    if (jsonStr != null && jsonStr.isNotEmpty) {
+      downloadTextFile(WebStorageHelper.backupFileName(), jsonStr);
+      if (context.mounted) {
+        _showBackupMessage(
+          context,
+          'Sauvegarde téléchargée : ${WebStorageHelper.backupFileName()}',
+        );
+      }
+    } else {
+      final ok = WebStorageHelper.exportBackup();
+      if (context.mounted) {
+        _showBackupMessage(
+          context,
+          ok
+              ? 'Sauvegarde téléchargée : ${WebStorageHelper.backupFileName()}'
+              : 'Aucune donnée à exporter pour le moment.',
+          isError: !ok,
+        );
+      }
+    }
   }
 
   Future<void> _handleImport(BuildContext context) async {
@@ -658,8 +674,8 @@ class _QuickCaptureBarState extends ConsumerState<QuickCaptureBar> {
           style: TextStyle(color: AppTheme.textPrimary, fontSize: 16),
         ),
         content: Text(
-          'Les données actuelles de ce navigateur seront REMPLACÉES par celles du fichier. '
-          'Pensez à exporter d\'abord si vous voulez les conserver.',
+          'Les données actuelles seront REMPLACÉES par celles du fichier JSON importé. '
+          'Pensez à exporter d\'abord si vous souhaitez les conserver.',
           style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
         ),
         actions: [
@@ -678,10 +694,29 @@ class _QuickCaptureBarState extends ConsumerState<QuickCaptureBar> {
     );
     if (confirmed != true) return;
 
-    final error = await WebStorageHelper.importBackup();
-    if (error != null && context.mounted) {
-      _showBackupMessage(context, error, isError: true);
+    final raw = await pickTextFile();
+    if (raw == null) return;
+
+    final repo = ref.read(taskRepositoryProvider);
+    final error = await repo.importBackupJson(raw);
+    if (error != null) {
+      if (context.mounted) {
+        _showBackupMessage(context, error, isError: true);
+      }
+      return;
     }
+
+    if (context.mounted) {
+      _showBackupMessage(
+        context,
+        'Sauvegarde importée avec succès ! Synchronisation...',
+      );
+    }
+
+    // Rechargement propre pour rafraîchir l'ensemble de l'interface
+    Future.delayed(const Duration(milliseconds: 600), () {
+      reloadPage();
+    });
   }
 
   Widget _buildMinimalThemeButton() {
