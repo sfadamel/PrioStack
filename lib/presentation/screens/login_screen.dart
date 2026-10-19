@@ -393,10 +393,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           runSpacing: 4,
                           children: [
                             ActionChip(
-                              label: const Text('Ce PC (localhost)', style: TextStyle(fontSize: 10)),
+                              avatar: const Icon(Icons.cloud_done_rounded, size: 14, color: AppTheme.neonGreen),
+                              label: const Text('Cloud (Render)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
                               onPressed: () {
                                 setState(() {
-                                  _apiUrlCtrl.text = 'http://localhost:4000/api';
+                                  _apiUrlCtrl.text = 'https://priostack-api.onrender.com/api';
                                   ref.read(authApiUrlProvider.notifier).setApiUrl(_apiUrlCtrl.text);
                                 });
                               },
@@ -406,6 +407,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               onPressed: () {
                                 setState(() {
                                   _apiUrlCtrl.text = 'http://192.168.1.68:4000/api';
+                                  ref.read(authApiUrlProvider.notifier).setApiUrl(_apiUrlCtrl.text);
+                                });
+                              },
+                            ),
+                            ActionChip(
+                              label: const Text('Localhost (ce PC)', style: TextStyle(fontSize: 10)),
+                              onPressed: () {
+                                setState(() {
+                                  _apiUrlCtrl.text = 'http://localhost:4000/api';
                                   ref.read(authApiUrlProvider.notifier).setApiUrl(_apiUrlCtrl.text);
                                 });
                               },

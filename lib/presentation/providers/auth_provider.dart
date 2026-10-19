@@ -7,7 +7,7 @@ import '../../domain/models/auth_user.dart';
 import '../../data/local/memory/web_storage_stub.dart'
     if (dart.library.html) '../../data/local/memory/web_storage_html.dart';
 
-const String kDefaultApiBaseUrl = 'http://localhost:4000/api';
+const String kDefaultApiBaseUrl = 'https://priostack-api.onrender.com/api';
 const String _kTokenStorageKey = 'priostack_auth_jwt_token';
 const String _kUserStorageKey = 'priostack_auth_user_data';
 const String _kApiUrlStorageKey = 'priostack_api_base_url';
