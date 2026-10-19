@@ -134,27 +134,39 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
 
-      if (resp.statusCode == 201 && data['token'] != null) {
-        final token = data['token'] as String;
-        final user = AuthUser.fromJson(data['user'] as Map<String, dynamic>);
+      if (resp.statusCode == 201) {
+        if (data['pendingApproval'] == true) {
+          state = state.copyWith(
+            isLoading: false,
+            errorMessage: null,
+            infoMessage: data['message'] as String? ??
+                'Votre compte a été créé ! Il doit être validé par un administrateur avant votre première connexion.',
+          );
+          return true;
+        }
 
-        setStorageItem(_kTokenStorageKey, token);
-        setStorageItem(_kUserStorageKey, jsonEncode(user.toJson()));
+        if (data['token'] != null) {
+          final token = data['token'] as String;
+          final user = AuthUser.fromJson(data['user'] as Map<String, dynamic>);
 
-        state = AuthState(
-          isAuthenticated: true,
-          isLoading: false,
-          token: token,
-          user: user,
-        );
-        return true;
-      } else {
-        state = state.copyWith(
-          isLoading: false,
-          errorMessage: data['error'] as String? ?? 'Erreur d\'inscription',
-        );
-        return false;
+          setStorageItem(_kTokenStorageKey, token);
+          setStorageItem(_kUserStorageKey, jsonEncode(user.toJson()));
+
+          state = AuthState(
+            isAuthenticated: true,
+            isLoading: false,
+            token: token,
+            user: user,
+          );
+          return true;
+        }
       }
+
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: data['error'] as String? ?? 'Erreur d\'inscription',
+      );
+      return false;
     } catch (e) {
       state = state.copyWith(
         isLoading: false,

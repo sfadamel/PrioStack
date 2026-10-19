@@ -38,6 +38,7 @@ class AuthState {
   final AuthUser? user;
   final String? token;
   final String? errorMessage;
+  final String? infoMessage;
 
   const AuthState({
     this.isAuthenticated = false,
@@ -45,6 +46,7 @@ class AuthState {
     this.user,
     this.token,
     this.errorMessage,
+    this.infoMessage,
   });
 
   AuthState copyWith({
@@ -53,6 +55,8 @@ class AuthState {
     AuthUser? user,
     String? token,
     String? errorMessage,
+    String? infoMessage,
+    bool clearInfo = false,
   }) {
     return AuthState(
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
@@ -60,6 +64,7 @@ class AuthState {
       user: user ?? this.user,
       token: token ?? this.token,
       errorMessage: errorMessage,
+      infoMessage: clearInfo ? null : (infoMessage ?? this.infoMessage),
     );
   }
 }

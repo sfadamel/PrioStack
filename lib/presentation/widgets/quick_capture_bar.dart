@@ -9,7 +9,9 @@ import '../../domain/models/task_enums.dart';
 import '../providers/auth_provider.dart';
 import '../providers/notification_provider.dart';
 import '../providers/priostack_providers.dart';
+import '../providers/admin_provider.dart';
 import 'notification_center_widgets.dart';
+import 'admin_user_management_dialog.dart';
 
 /// Barre supérieure minimaliste (Style Linear / Raycast) :
 /// - Gauche : Marque PrioStack + Commutateur segmenté (Cockpit | Calendrier)
@@ -182,6 +184,15 @@ class _QuickCaptureBarState extends ConsumerState<QuickCaptureBar> {
                         onTap: () => ref
                             .read(cockpitMainViewProvider.notifier)
                             .setView(CockpitMainView.calendar),
+                      ),
+                      const SizedBox(width: 2),
+                      _buildViewSegment(
+                        label: 'Réunions',
+                        icon: Icons.edit_note_rounded,
+                        isActive: currentView == CockpitMainView.meetings,
+                        onTap: () => ref
+                            .read(cockpitMainViewProvider.notifier)
+                            .setView(CockpitMainView.meetings),
                       ),
                     ],
                   ),
@@ -750,6 +761,10 @@ class _QuickCaptureBarState extends ConsumerState<QuickCaptureBar> {
         ? user.fullName.trim().split(' ').map((p) => p.isNotEmpty ? p[0] : '').take(2).join().toUpperCase()
         : 'US';
 
+    final pendingCount = (user?.isAdmin ?? false)
+        ? ref.watch(adminUsersProvider).pendingApprovalCount
+        : 0;
+
     return PopupMenuButton<String>(
       tooltip: user != null ? '${user.fullName} (${user.role})' : 'Mon compte',
       offset: const Offset(0, 42),
@@ -759,7 +774,12 @@ class _QuickCaptureBarState extends ConsumerState<QuickCaptureBar> {
         side: BorderSide(color: AppTheme.borderHighlight),
       ),
       onSelected: (value) {
-        if (value == 'logout') {
+        if (value == 'admin_users') {
+          showDialog(
+            context: context,
+            builder: (_) => const AdminUserManagementDialog(),
+          );
+        } else if (value == 'logout') {
           ref.read(authProvider.notifier).logout();
         }
       },
@@ -807,6 +827,36 @@ class _QuickCaptureBarState extends ConsumerState<QuickCaptureBar> {
             ],
           ),
         ),
+        if (user?.isAdmin ?? false) ...[
+          const PopupMenuDivider(),
+          PopupMenuItem<String>(
+            value: 'admin_users',
+            child: Row(
+              children: [
+                const Icon(Icons.people_outline_rounded, size: 16, color: AppTheme.neonAmber),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Gestion des inscriptions',
+                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 12.5, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                if (pendingCount > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: AppTheme.neonPink,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '$pendingCount',
+                      style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
         const PopupMenuDivider(),
         const PopupMenuItem<String>(
           value: 'logout',
@@ -822,29 +872,54 @@ class _QuickCaptureBarState extends ConsumerState<QuickCaptureBar> {
           ),
         ),
       ],
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: (user?.isAdmin ?? false)
-              ? AppTheme.neonAmber.withValues(alpha: 0.18)
-              : AppTheme.accentBlue.withValues(alpha: 0.18),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: (user?.isAdmin ?? false)
-                ? AppTheme.neonAmber.withValues(alpha: 0.5)
-                : AppTheme.accentBlue.withValues(alpha: 0.5),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: (user?.isAdmin ?? false)
+                  ? AppTheme.neonAmber.withValues(alpha: 0.18)
+                  : AppTheme.accentBlue.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: (user?.isAdmin ?? false)
+                    ? AppTheme.neonAmber.withValues(alpha: 0.5)
+                    : AppTheme.accentBlue.withValues(alpha: 0.5),
+              ),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              initials,
+              style: TextStyle(
+                color: (user?.isAdmin ?? false) ? AppTheme.neonAmber : AppTheme.accentBlue,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
           ),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          initials,
-          style: TextStyle(
-            color: (user?.isAdmin ?? false) ? AppTheme.neonAmber : AppTheme.accentBlue,
-            fontSize: 12,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
+          if (pendingCount > 0)
+            Positioned(
+              top: -3,
+              right: -3,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(
+                  color: AppTheme.neonPink,
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  '$pendingCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 8.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

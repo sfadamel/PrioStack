@@ -10,6 +10,7 @@ import '../widgets/morning_checklist_panel.dart';
 import '../widgets/notification_center_widgets.dart';
 import '../widgets/quick_capture_bar.dart';
 import '../widgets/triage_shield_panel.dart';
+import '../widgets/meeting_notes_panel.dart';
 
 /// Intent pour le raccourci clavier global Ctrl + K (Capture Éclair)
 class FocusQuickCaptureIntent extends Intent {
@@ -79,11 +80,13 @@ class _CockpitScreenState extends ConsumerState<CockpitScreen> {
                       Expanded(
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-                          child: mainView == CockpitMainView.calendar
-                              ? const CalendarScreenPanel()
-                              : (isDesktop
-                                  ? _buildDesktopThreeColumns()
-                                  : _buildMobileBody()),
+                          child: mainView == CockpitMainView.meetings
+                              ? const MeetingNotesPanel()
+                              : (mainView == CockpitMainView.calendar
+                                  ? const CalendarScreenPanel()
+                                  : (isDesktop
+                                      ? _buildDesktopThreeColumns()
+                                      : _buildMobileBody())),
                         ),
                       ),
 
@@ -103,11 +106,17 @@ class _CockpitScreenState extends ConsumerState<CockpitScreen> {
                         ),
                         child: BottomNavigationBar(
                           type: BottomNavigationBarType.fixed,
-                          currentIndex: mainView == CockpitMainView.calendar
-                              ? 3
-                              : _mobileNavIndex,
+                          currentIndex: mainView == CockpitMainView.meetings
+                              ? 4
+                              : (mainView == CockpitMainView.calendar
+                                  ? 3
+                                  : _mobileNavIndex),
                           onTap: (idx) {
-                            if (idx == 3) {
+                            if (idx == 4) {
+                              ref
+                                  .read(cockpitMainViewProvider.notifier)
+                                  .setView(CockpitMainView.meetings);
+                            } else if (idx == 3) {
                               ref
                                   .read(cockpitMainViewProvider.notifier)
                                   .setView(CockpitMainView.calendar);
@@ -137,6 +146,10 @@ class _CockpitScreenState extends ConsumerState<CockpitScreen> {
                             BottomNavigationBarItem(
                               icon: Icon(Icons.calendar_month_rounded),
                               label: 'Calendrier',
+                            ),
+                            BottomNavigationBarItem(
+                              icon: Icon(Icons.edit_note_rounded),
+                              label: 'Réunions',
                             ),
                           ],
                         ),

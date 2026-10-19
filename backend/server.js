@@ -46,7 +46,7 @@ app.post('/api/auth/login', async (req, res) => {
 
   try {
     const userRes = await pool.query(
-      'SELECT id, email, password_hash, full_name, role, is_active FROM users WHERE LOWER(email) = LOWER($1)',
+      'SELECT id, email, password_hash, full_name, role, is_active, is_approved FROM users WHERE LOWER(email) = LOWER($1)',
       [email.trim()]
     );
 
@@ -62,6 +62,13 @@ app.post('/api/auth/login', async (req, res) => {
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
       return res.status(401).json({ error: 'Identifiants incorrects' });
+    }
+
+    // Vérification de la validation par l'administrateur
+    if (user.role !== 'admin' && !user.is_approved) {
+      return res.status(403).json({
+        error: 'Votre compte est en attente de validation par un administrateur avant de pouvoir vous connecter.'
+      });
     }
 
     const token = jwt.sign(
@@ -85,7 +92,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// Création de compte (Inscription ou création par admin)
+// Création de compte (Inscription soumise à validation administrateur)
 app.post('/api/auth/register', async (req, res) => {
   const { email, password, fullName } = req.body;
   if (!email || !password || !fullName) {
@@ -102,31 +109,83 @@ app.post('/api/auth/register', async (req, res) => {
     const hash = await bcrypt.hash(password, salt);
 
     const insert = await pool.query(
-      `INSERT INTO users (email, password_hash, full_name, role)
-       VALUES ($1, $2, $3, 'user')
-       RETURNING id, email, full_name, role`,
+      `INSERT INTO users (email, password_hash, full_name, role, is_approved)
+       VALUES ($1, $2, $3, 'user', FALSE)
+       RETURNING id, email, full_name, role, is_approved`,
       [email.trim().toLowerCase(), hash, fullName.trim()]
     );
 
     const newUser = insert.rows[0];
-    const token = jwt.sign(
-      { id: newUser.id, email: newUser.email, role: newUser.role, name: newUser.full_name },
-      JWT_SECRET,
-      { expiresIn: '30d' }
-    );
-
     return res.status(201).json({
-      token,
+      message: 'Inscription enregistrée ! Votre compte doit être validé par un administrateur avant votre première connexion.',
+      pendingApproval: true,
       user: {
         id: newUser.id,
         email: newUser.email,
         fullName: newUser.full_name,
-        role: newUser.role
+        role: newUser.role,
+        isApproved: false
       }
     });
   } catch (err) {
     console.error('Erreur register:', err);
     return res.status(500).json({ error: 'Erreur lors de la création du compte' });
+  }
+});
+
+// --- ROUTES D'ADMINISTRATION (Validation des utilisateurs) ---
+
+// Lister les utilisateurs
+app.get('/api/admin/users', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Accès réservé aux administrateurs' });
+  }
+  try {
+    const result = await pool.query(
+      'SELECT id, email, full_name, role, is_active, is_approved, created_at FROM users ORDER BY created_at DESC'
+    );
+    res.json({ users: result.rows });
+  } catch (err) {
+    console.error('Erreur get admin users:', err);
+    res.status(500).json({ error: 'Erreur lors de la récupération des utilisateurs' });
+  }
+});
+
+// Valider un utilisateur
+app.post('/api/admin/users/:id/approve', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Accès réservé aux administrateurs' });
+  }
+  try {
+    const updateRes = await pool.query(
+      'UPDATE users SET is_approved = TRUE, updated_at = NOW() WHERE id = $1 RETURNING id, email, full_name, role, is_approved',
+      [req.params.id]
+    );
+    if (updateRes.rows.length === 0) return res.status(404).json({ error: 'Utilisateur introuvable' });
+    res.json({ success: true, user: updateRes.rows[0] });
+  } catch (err) {
+    console.error('Erreur approve user:', err);
+    res.status(500).json({ error: 'Erreur lors de l\'approbation de l\'utilisateur' });
+  }
+});
+
+// Supprimer ou révoquer un utilisateur
+app.delete('/api/admin/users/:id', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Accès réservé aux administrateurs' });
+  }
+  try {
+    const delRes = await pool.query(
+      'DELETE FROM users WHERE id = $1 AND role != \'admin\' RETURNING id, email',
+      [req.params.id]
+    );
+    if (delRes.rows.length === 0) {
+      return res.status(400).json({ error: 'Impossible de supprimer cet utilisateur (introuvable ou compte administrateur)' });
+    }
+    res.json({ success: true, deletedId: req.params.id });
+  } catch (err) {
+    console.error('Erreur delete user:', err);
+    res.status(500).json({ error: 'Erreur lors de la suppression de l\'utilisateur' });
   }
 });
 
@@ -819,6 +878,102 @@ app.post('/api/backup/import', authMiddleware, async (req, res) => {
     res.status(500).json({ error: 'Erreur lors de l\'importation : ' + err.message });
   } finally {
     client.release();
+  }
+});
+
+// --- 5. ROUTES NOTES DE RÉUNION (AUTO-SAVE & HISTORIQUE) ---
+
+// Récupérer toutes les réunions de l'utilisateur
+app.get('/api/meetings', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, title, meeting_date, participants, content, action_items, created_at, updated_at FROM meeting_notes WHERE user_id = $1 ORDER BY updated_at DESC',
+      [req.user.id]
+    );
+    res.json({ meetings: result.rows });
+  } catch (err) {
+    console.error('Erreur get meetings:', err);
+    res.status(500).json({ error: 'Erreur lors de la récupération des réunions' });
+  }
+});
+
+// Créer ou enregistrer une nouvelle réunion
+app.post('/api/meetings', authMiddleware, async (req, res) => {
+  const { id, title, meetingDate, participants, content, actionItems } = req.body;
+  try {
+    const insert = await pool.query(
+      `INSERT INTO meeting_notes (id, user_id, title, meeting_date, participants, content, action_items)
+       VALUES (COALESCE($1, gen_random_uuid()), $2, $3, COALESCE($4, NOW()), $5, $6, $7)
+       RETURNING id, title, meeting_date, participants, content, action_items, created_at, updated_at`,
+      [
+        id || null,
+        req.user.id,
+        title || 'Nouvelle Réunion',
+        meetingDate || new Date(),
+        participants || '',
+        content || '',
+        JSON.stringify(actionItems || [])
+      ]
+    );
+    res.status(201).json({ meeting: insert.rows[0] });
+  } catch (err) {
+    console.error('Erreur create meeting:', err);
+    res.status(500).json({ error: 'Erreur lors de la création de la réunion' });
+  }
+});
+
+// Mettre à jour / Sauvegarde automatique d'une réunion
+app.put('/api/meetings/:id', authMiddleware, async (req, res) => {
+  const { title, meetingDate, participants, content, actionItems } = req.body;
+  try {
+    const update = await pool.query(
+      `INSERT INTO meeting_notes (id, user_id, title, meeting_date, participants, content, action_items, updated_at)
+       VALUES ($1, $2, $3, COALESCE($4, NOW()), $5, $6, $7, NOW())
+       ON CONFLICT (id) DO UPDATE SET
+         title = EXCLUDED.title,
+         meeting_date = EXCLUDED.meeting_date,
+         participants = EXCLUDED.participants,
+         content = EXCLUDED.content,
+         action_items = EXCLUDED.action_items,
+         updated_at = NOW()
+       WHERE meeting_notes.user_id = $2
+       RETURNING id, title, meeting_date, participants, content, action_items, created_at, updated_at`,
+      [
+        req.params.id,
+        req.user.id,
+        title || 'Réunion sans titre',
+        meetingDate || new Date(),
+        participants || '',
+        content || '',
+        JSON.stringify(actionItems || [])
+      ]
+    );
+
+    if (update.rows.length === 0) {
+      return res.status(404).json({ error: 'Réunion introuvable' });
+    }
+
+    res.json({ meeting: update.rows[0] });
+  } catch (err) {
+    console.error('Erreur update meeting:', err);
+    res.status(500).json({ error: 'Erreur lors de la sauvegarde de la réunion' });
+  }
+});
+
+// Supprimer une réunion
+app.delete('/api/meetings/:id', authMiddleware, async (req, res) => {
+  try {
+    const del = await pool.query(
+      'DELETE FROM meeting_notes WHERE id = $1 AND user_id = $2 RETURNING id',
+      [req.params.id, req.user.id]
+    );
+    if (del.rows.length === 0) {
+      return res.status(404).json({ error: 'Réunion introuvable' });
+    }
+    res.json({ success: true, deletedId: req.params.id });
+  } catch (err) {
+    console.error('Erreur delete meeting:', err);
+    res.status(500).json({ error: 'Erreur suppression réunion' });
   }
 });
 

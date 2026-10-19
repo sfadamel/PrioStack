@@ -179,21 +179,30 @@ if __name__ == "__main__":
     master = create_priostack_icon(1024)
     
     # Target folders
-    web_dir = r"d:\Workspace\DamelIT\Antigravity\PrioStack\web"
+    repo_dir = r"d:\Workspace\DamelIT\Antigravity\PrioStack"
+    web_dir = os.path.join(repo_dir, "web")
     icons_dir = os.path.join(web_dir, "icons")
+    windows_res_dir = os.path.join(repo_dir, "windows", "runner", "resources")
+    installer_dir = os.path.join(repo_dir, "installer")
     os.makedirs(icons_dir, exist_ok=True)
+    os.makedirs(windows_res_dir, exist_ok=True)
+    os.makedirs(installer_dir, exist_ok=True)
     
     # 1. Favicon PNG (64x64 multi-purpose / crisp)
-    fav_32 = master.resize((32, 32), Image.Resampling.LANCZOS)
     fav_64 = master.resize((64, 64), Image.Resampling.LANCZOS)
     fav_64.save(os.path.join(web_dir, "favicon.png"), "PNG")
     fav_64.save(os.path.join(web_dir, "favicon.ico"), format="ICO", sizes=[(16, 16), (32, 32), (48, 48), (64, 64)])
     
-    # 2. SVG Favicon
+    # 2. Windows Multi-Size ICO for desktop .exe and runner
+    ico_sizes = [(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
+    master.save(os.path.join(windows_res_dir, "app_icon.ico"), format="ICO", sizes=ico_sizes)
+    master.save(os.path.join(installer_dir, "app_icon.ico"), format="ICO", sizes=ico_sizes)
+    
+    # 3. SVG Favicon
     with open(os.path.join(web_dir, "favicon.svg"), "w", encoding="utf-8") as f:
         f.write(create_svg())
         
-    # 3. PWA Icons
+    # 4. PWA Icons
     master.resize((192, 192), Image.Resampling.LANCZOS).save(os.path.join(icons_dir, "Icon-192.png"), "PNG")
     master.resize((512, 512), Image.Resampling.LANCZOS).save(os.path.join(icons_dir, "Icon-512.png"), "PNG")
     master.resize((192, 192), Image.Resampling.LANCZOS).save(os.path.join(icons_dir, "Icon-maskable-192.png"), "PNG")
@@ -202,4 +211,4 @@ if __name__ == "__main__":
     # Also save master in web
     master.resize((256, 256), Image.Resampling.LANCZOS).save(os.path.join(web_dir, "priostack_logo.png"), "PNG")
     
-    print("All PrioStack icons generated successfully!")
+    print("All PrioStack icons (Web + Windows app_icon.ico + Installer) generated successfully!")

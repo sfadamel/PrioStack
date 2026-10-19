@@ -12,10 +12,11 @@ import '../../domain/models/task_enums.dart';
 import '../../domain/repositories/task_repository.dart';
 import 'auth_provider.dart';
 
-/// Vue principale affichée sur l'écran (Cockpit 3 colonnes vs Calendrier & Agenda complet)
+/// Vue principale affichée sur l'écran (Cockpit 3 colonnes vs Calendrier vs Notes de Réunion)
 enum CockpitMainView {
   cockpit,
   calendar,
+  meetings,
 }
 
 /// Notifier pour basculer entre la vue Cockpit PrioStack et la vue Calendrier & Agenda

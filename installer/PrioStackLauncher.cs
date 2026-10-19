@@ -74,7 +74,14 @@ namespace PrioStackLauncher
             // Create system tray icon so the server stays alive even when msedge delegates to an existing process
             using (NotifyIcon trayIcon = new NotifyIcon())
             {
-                trayIcon.Icon = SystemIcons.Application;
+                try
+                {
+                    trayIcon.Icon = Icon.ExtractAssociatedIcon(Assembly.GetExecutingAssembly().Location);
+                }
+                catch
+                {
+                    trayIcon.Icon = SystemIcons.Application;
+                }
                 trayIcon.Text = string.Format("PrioStack v1.2 (127.0.0.1:{0})", _port);
                 trayIcon.Visible = true;
 

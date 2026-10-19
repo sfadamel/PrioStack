@@ -16,10 +16,11 @@ New-Item -ItemType Directory -Force -Path $appDir | Out-Null
 Write-Host "2. Copie du bundle de production PrioStack dans $appDir"
 Copy-Item -Path "$webBuildDir\*" -Destination $appDir -Recurse -Force
 
-Write-Host "3. Compilation de l'executable Windows PrioStack.exe"
+Write-Host "3. Compilation de l'executable Windows PrioStack.exe avec icone dediee"
 $launcherExe = Join-Path $portableDir "PrioStack.exe"
 $launcherCs = Join-Path $PSScriptRoot "PrioStackLauncher.cs"
-& $csc /target:winexe /out:$launcherExe /r:System.Windows.Forms.dll /r:System.Drawing.dll $launcherCs
+$iconPath = Join-Path $PSScriptRoot "app_icon.ico"
+& $csc /target:winexe /out:$launcherExe /win32icon:$iconPath /r:System.Windows.Forms.dll /r:System.Drawing.dll $launcherCs
 if ($LASTEXITCODE -ne 0) {
     throw "Echec de la compilation de PrioStack.exe"
 }
@@ -31,7 +32,7 @@ Compress-Archive -Path "$portableDir\*" -DestinationPath $payloadZip -Force
 Write-Host "5. Compilation de l'installateur autonome PrioStack_Setup_v1.2.exe"
 $setupExe = Join-Path $distDir "PrioStack_Setup_v1.2.exe"
 $installerCs = Join-Path $PSScriptRoot "PrioStackInstaller.cs"
-& $csc /target:winexe /out:$setupExe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll /resource:"$payloadZip,payload.zip" $installerCs
+& $csc /target:winexe /out:$setupExe /win32icon:$iconPath /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll /resource:"$payloadZip,payload.zip" $installerCs
 if ($LASTEXITCODE -ne 0) {
     throw "Echec de la compilation de PrioStack_Setup_v1.2.exe"
 }

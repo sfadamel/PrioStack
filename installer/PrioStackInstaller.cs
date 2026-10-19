@@ -134,6 +134,12 @@ namespace PrioStackSetup
             _cancelBtn.Location = new Point(225, 304);
             _cancelBtn.Click += (s, e) => this.Close();
             this.Controls.Add(_cancelBtn);
+
+            try
+            {
+                this.Icon = Icon.ExtractAssociatedIcon(Assembly.GetExecutingAssembly().Location);
+            }
+            catch { }
         }
 
         private void OnInstallClick(object sender, EventArgs e)
@@ -243,6 +249,7 @@ namespace PrioStackSetup
                 dynamic shortcut = shell.CreateShortcut(shortcutPath);
                 shortcut.TargetPath = targetExe;
                 shortcut.WorkingDirectory = workingDir;
+                shortcut.IconLocation = targetExe + ",0";
                 shortcut.Description = "PrioStack - Cockpit de Gestion de la Charge Mentale";
                 shortcut.Save();
             }
