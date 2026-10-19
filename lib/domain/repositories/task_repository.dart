@@ -88,13 +88,16 @@ abstract class TaskRepository {
   /// Définir une tâche de fond comme active à la base de la pile (WIP Limit strict = 1)
   Future<void> activateDeepWorkTask(String taskId);
 
-  /// Ajouter un micro-jalon de 30 min à une tâche
+  /// Ajouter un micro-jalon à une tâche avec sa durée (par défaut 30 min)
   Future<void> addMicroMilestone(String taskId, String title, {int durationMinutes = 30});
 
-  /// Cocher / décocher un micro-jalon de 30 min
+  /// Modifier un micro-jalon (libellé et/ou durée)
+  Future<void> updateMicroMilestone(String milestoneId, {String? title, int? durationMinutes});
+
+  /// Cocher / décocher un micro-jalon
   Future<void> toggleMicroMilestone(String milestoneId, bool isDone);
 
-  /// Supprimer un micro-jalon de 30 min
+  /// Supprimer un micro-jalon
   Future<void> deleteMicroMilestone(String milestoneId);
 
   /// Supprimer une tâche (Soft-delete V2-Ready via deletedAt)

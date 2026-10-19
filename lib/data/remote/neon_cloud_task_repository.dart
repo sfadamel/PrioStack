@@ -369,6 +369,20 @@ class NeonCloudTaskRepository implements TaskRepository {
   }
 
   @override
+  Future<void> updateMicroMilestone(String milestoneId, {String? title, int? durationMinutes}) async {
+    final body = <String, dynamic>{};
+    if (title != null) body['title'] = title.trim();
+    if (durationMinutes != null) body['durationMinutes'] = durationMinutes;
+
+    await http.patch(
+      Uri.parse('$baseUrl/milestones/$milestoneId'),
+      headers: _headers,
+      body: jsonEncode(body),
+    );
+    _notify();
+  }
+
+  @override
   Future<void> toggleMicroMilestone(String milestoneId, bool isDone) async {
     await http.patch(
       Uri.parse('$baseUrl/milestones/$milestoneId'),

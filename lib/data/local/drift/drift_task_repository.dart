@@ -312,6 +312,22 @@ class DriftTaskRepository implements TaskRepository {
   }
 
   @override
+  Future<void> updateMicroMilestone(
+    String milestoneId, {
+    String? title,
+    int? durationMinutes,
+  }) async {
+    await (_db.update(_db.microMilestones)..where((m) => m.id.equals(milestoneId))).write(
+      MicroMilestonesCompanion(
+        title: title != null ? Value(title.trim()) : const Value.absent(),
+        durationMinutes: durationMinutes != null ? Value(durationMinutes) : const Value.absent(),
+        syncStatus: Value(SyncStatus.pending.dbValue),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  @override
   Future<void> toggleMicroMilestone(String milestoneId, bool isDone) async {
     await (_db.update(_db.microMilestones)..where((m) => m.id.equals(milestoneId))).write(
       MicroMilestonesCompanion(

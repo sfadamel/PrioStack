@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
+import '../../data/local/drift/app_database.dart';
 import '../../domain/models/task_enums.dart';
 import '../../domain/repositories/task_repository.dart';
 import '../providers/notification_provider.dart';
@@ -448,6 +449,10 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
     final totalSeconds = task.elapsedSeconds +
         (isTimerRunningOnThis ? (timerState.sessionSeconds % 5) : 0);
     final accent = isUrgencyTop ? AppTheme.neonPink : AppTheme.accentBlue;
+    final totalMilestonesMinutes = item.milestones.fold<int>(0, (sum, m) => sum + m.durationMinutes);
+    final totalHoursStr = totalMilestonesMinutes >= 60
+        ? '${totalMilestonesMinutes ~/ 60}h${(totalMilestonesMinutes % 60 > 0 ? (totalMilestonesMinutes % 60).toString().padLeft(2, '0') : '')}'
+        : '${totalMilestonesMinutes}m';
 
     return Container(
       decoration: BoxDecoration(
@@ -769,13 +774,13 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
                   ),
                 ),
 
-                // --- MICRO-JALONS DE 30 MINUTES (Liste épurée style Things 3 / Linear sans boîtes lourdes) ---
+                // --- MICRO-JALONS FLEXIBLES (Durée personnalisable & édition) ---
                 const SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'JALONS DE 30 MINUTES (${item.milestones.where((m) => m.isDone).length}/${item.milestones.length})',
+                      'MICRO-JALONS (${item.milestones.where((m) => m.isDone).length}/${item.milestones.length})${totalMilestonesMinutes > 0 ? " • $totalHoursStr total" : ""}',
                       style: TextStyle(
                         color: AppTheme.textMuted,
                         fontSize: 10.5,
@@ -814,7 +819,7 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 6),
                     child: Text(
-                      'Découpe cette tâche en sous-étapes de 30 minutes.',
+                      'Découpe cette tâche en étapes clés et choisis leur durée.',
                       style:
                           TextStyle(color: AppTheme.textMuted, fontSize: 11.5),
                     ),
@@ -834,40 +839,41 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
                           );
                     },
                     itemBuilder: (context, m, mIndex) {
-                      return InkWell(
-                        borderRadius: BorderRadius.circular(8),
-                        onTap: () => ref
-                            .read(taskRepositoryProvider)
-                            .toggleMicroMilestone(m.id, !m.isDone),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 7.5),
-                          decoration: BoxDecoration(
-                            border: Border(
-                              bottom: BorderSide(
-                                color: AppTheme.borderSubtle
-                                    .withValues(alpha: 0.55),
-                              ),
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 6.5),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: AppTheme.borderSubtle
+                                  .withValues(alpha: 0.55),
                             ),
                           ),
-                          child: Row(
-                            children: [
-                              ReorderableDragStartListener(
-                                index: mIndex,
-                                child: MouseRegion(
-                                  cursor: SystemMouseCursors.grab,
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(right: 6),
-                                    child: Icon(
-                                      Icons.drag_indicator_rounded,
-                                      size: 14,
-                                      color: AppTheme.textMuted
-                                          .withValues(alpha: 0.5),
-                                    ),
+                        ),
+                        child: Row(
+                          children: [
+                            ReorderableDragStartListener(
+                              index: mIndex,
+                              child: MouseRegion(
+                                cursor: SystemMouseCursors.grab,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(right: 6),
+                                  child: Icon(
+                                    Icons.drag_indicator_rounded,
+                                    size: 14,
+                                    color: AppTheme.textMuted
+                                        .withValues(alpha: 0.5),
                                   ),
                                 ),
                               ),
-                              Container(
+                            ),
+                            // Case à cocher
+                            InkWell(
+                              borderRadius: BorderRadius.circular(4),
+                              onTap: () => ref
+                                  .read(taskRepositoryProvider)
+                                  .toggleMicroMilestone(m.id, !m.isDone),
+                              child: Container(
                                 width: 16,
                                 height: 16,
                                 decoration: BoxDecoration(
@@ -887,50 +893,103 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
                                         size: 11, color: Colors.black)
                                     : null,
                               ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  m.title,
-                                  style: TextStyle(
-                                    color: m.isDone
-                                        ? AppTheme.textMuted
-                                        : AppTheme.textPrimary,
-                                    fontSize: 12.5,
-                                    fontWeight: m.isDone
-                                        ? FontWeight.w400
-                                        : FontWeight.w500,
-                                    decoration: m.isDone
-                                        ? TextDecoration.lineThrough
-                                        : null,
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                '${m.durationMinutes}m',
-                                style: TextStyle(
-                                  color: AppTheme.textMuted,
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              InkWell(
+                            ),
+                            const SizedBox(width: 10),
+                            // Libellé cliquable pour modifier
+                            Expanded(
+                              child: InkWell(
                                 borderRadius: BorderRadius.circular(4),
-                                onTap: () => ref
-                                    .read(taskRepositoryProvider)
-                                    .deleteMicroMilestone(m.id),
+                                onTap: () => _showEditMilestoneDialog(context, ref, m),
                                 child: Padding(
-                                  padding: const EdgeInsets.all(2),
-                                  child: Icon(
-                                    Icons.close_rounded,
-                                    size: 13.5,
-                                    color: AppTheme.textMuted
-                                        .withValues(alpha: 0.6),
+                                  padding: const EdgeInsets.symmetric(vertical: 2),
+                                  child: Text(
+                                    m.title,
+                                    style: TextStyle(
+                                      color: m.isDone
+                                          ? AppTheme.textMuted
+                                          : AppTheme.textPrimary,
+                                      fontSize: 12.5,
+                                      fontWeight: m.isDone
+                                          ? FontWeight.w400
+                                          : FontWeight.w500,
+                                      decoration: m.isDone
+                                          ? TextDecoration.lineThrough
+                                          : null,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(width: 6),
+                            // Pastille Durée interactive (clic pour modifier)
+                            InkWell(
+                              borderRadius: BorderRadius.circular(5),
+                              onTap: () => _showEditMilestoneDialog(context, ref, m),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2.5),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.surfaceElevated,
+                                  borderRadius: BorderRadius.circular(5),
+                                  border: Border.all(
+                                    color: AppTheme.borderSubtle,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.schedule_rounded,
+                                      size: 10.5,
+                                      color: m.isDone ? AppTheme.textMuted : AppTheme.accentBlue,
+                                    ),
+                                    const SizedBox(width: 3.5),
+                                    Text(
+                                      '${m.durationMinutes}m',
+                                      style: TextStyle(
+                                        color: m.isDone
+                                            ? AppTheme.textMuted
+                                            : AppTheme.textSecondary,
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            // Bouton Édition (crayon)
+                            InkWell(
+                              borderRadius: BorderRadius.circular(4),
+                              onTap: () => _showEditMilestoneDialog(context, ref, m),
+                              child: Padding(
+                                padding: const EdgeInsets.all(3),
+                                child: Icon(
+                                  Icons.edit_outlined,
+                                  size: 13,
+                                  color: AppTheme.textMuted.withValues(alpha: 0.7),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 2),
+                            // Bouton Supprimer
+                            InkWell(
+                              borderRadius: BorderRadius.circular(4),
+                              onTap: () => ref
+                                  .read(taskRepositoryProvider)
+                                  .deleteMicroMilestone(m.id),
+                              child: Padding(
+                                padding: const EdgeInsets.all(3),
+                                child: Icon(
+                                  Icons.close_rounded,
+                                  size: 13.5,
+                                  color: AppTheme.textMuted
+                                      .withValues(alpha: 0.6),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       );
                     },
@@ -1224,42 +1283,238 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
     WidgetRef ref,
     String taskId,
   ) async {
-    final ctrl = TextEditingController();
+    await _showMilestoneDialog(
+      context: context,
+      ref: ref,
+      dialogTitle: 'Nouveau Jalon',
+      confirmButtonLabel: 'Ajouter',
+      initialTitle: '',
+      initialDuration: 30,
+      onConfirm: (title, durationMinutes) async {
+        await ref
+            .read(taskRepositoryProvider)
+            .addMicroMilestone(taskId, title, durationMinutes: durationMinutes);
+      },
+    );
+  }
+
+  Future<void> _showEditMilestoneDialog(
+    BuildContext context,
+    WidgetRef ref,
+    MicroMilestone milestone,
+  ) async {
+    await _showMilestoneDialog(
+      context: context,
+      ref: ref,
+      dialogTitle: 'Modifier le Jalon',
+      confirmButtonLabel: 'Enregistrer',
+      initialTitle: milestone.title,
+      initialDuration: milestone.durationMinutes,
+      onConfirm: (title, durationMinutes) async {
+        await ref
+            .read(taskRepositoryProvider)
+            .updateMicroMilestone(
+              milestone.id,
+              title: title,
+              durationMinutes: durationMinutes,
+            );
+      },
+    );
+  }
+
+  Future<void> _showMilestoneDialog({
+    required BuildContext context,
+    required WidgetRef ref,
+    required String dialogTitle,
+    required String confirmButtonLabel,
+    String initialTitle = '',
+    int initialDuration = 30,
+    required Future<void> Function(String title, int durationMinutes) onConfirm,
+  }) async {
+    final titleCtrl = TextEditingController(text: initialTitle);
+    final durationCtrl = TextEditingController(text: initialDuration.toString());
+    int selectedDuration = initialDuration;
+    final presets = [15, 30, 45, 60, 90, 120];
+
     await showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.surfaceCard,
-        title: Text(
-          'Nouveau Jalon (30 min)',
-          style: TextStyle(color: AppTheme.textPrimary, fontSize: 15.5),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          backgroundColor: AppTheme.surfaceCard,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: AppTheme.borderHighlight),
+          ),
+          title: Text(
+            dialogTitle,
+            style: TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Libellé du jalon',
+                    style: TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: titleCtrl,
+                    autofocus: true,
+                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'Ex: Déploiement des conteneurs Docker',
+                      hintStyle: TextStyle(color: AppTheme.textMuted, fontSize: 12.5),
+                      filled: true,
+                      fillColor: AppTheme.bgDeep,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: AppTheme.borderSubtle),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: AppTheme.accentBlue),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Durée estimée',
+                        style: TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        '$selectedDuration min (${selectedDuration >= 60 ? "${selectedDuration ~/ 60}h${(selectedDuration % 60 > 0 ? (selectedDuration % 60).toString().padLeft(2, '0') : '')}" : "${selectedDuration}m"})',
+                        style: const TextStyle(
+                          color: AppTheme.accentBlue,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: presets.map((p) {
+                      final isSelected = selectedDuration == p;
+                      return InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () {
+                          setState(() {
+                            selectedDuration = p;
+                            durationCtrl.text = p.toString();
+                          });
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: isSelected ? AppTheme.accentBlue : AppTheme.bgDeep,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: isSelected ? AppTheme.accentBlue : AppTheme.borderSubtle,
+                            ),
+                          ),
+                          child: Text(
+                            '${p}m',
+                            style: TextStyle(
+                              color: isSelected ? Colors.white : AppTheme.textSecondary,
+                              fontSize: 11.5,
+                              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Text(
+                        'Durée personnalisée :',
+                        style: TextStyle(color: AppTheme.textMuted, fontSize: 11.5),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 76,
+                        height: 32,
+                        child: TextField(
+                          controller: durationCtrl,
+                          keyboardType: TextInputType.number,
+                          style: TextStyle(color: AppTheme.textPrimary, fontSize: 12),
+                          decoration: InputDecoration(
+                            suffixText: 'min',
+                            suffixStyle: TextStyle(color: AppTheme.textMuted, fontSize: 10),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                            filled: true,
+                            fillColor: AppTheme.bgDeep,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(6),
+                              borderSide: BorderSide(color: AppTheme.borderSubtle),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(6),
+                              borderSide: const BorderSide(color: AppTheme.accentBlue),
+                            ),
+                          ),
+                          onChanged: (val) {
+                            final parsed = int.tryParse(val);
+                            if (parsed != null && parsed > 0) {
+                              setState(() {
+                                selectedDuration = parsed;
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Annuler'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.accentBlue,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () async {
+                final trimmed = titleCtrl.text.trim();
+                if (trimmed.isNotEmpty) {
+                  await onConfirm(trimmed, selectedDuration);
+                }
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: Text(confirmButtonLabel, style: const TextStyle(fontWeight: FontWeight.w700)),
+            ),
+          ],
         ),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          style: TextStyle(color: AppTheme.textPrimary),
-          decoration: const InputDecoration(
-            hintText: 'Ex: Rédiger le schéma de séquence API',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Annuler'),
-          ),
-          ElevatedButton(
-            style:
-                ElevatedButton.styleFrom(backgroundColor: AppTheme.accentBlue),
-            onPressed: () async {
-              if (ctrl.text.trim().isNotEmpty) {
-                await ref
-                    .read(taskRepositoryProvider)
-                    .addMicroMilestone(taskId, ctrl.text);
-              }
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            child: const Text('Ajouter', style: TextStyle(color: Colors.white)),
-          ),
-        ],
       ),
     );
   }

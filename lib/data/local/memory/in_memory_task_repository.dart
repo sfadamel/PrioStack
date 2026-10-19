@@ -811,6 +811,23 @@ class InMemoryTaskRepository implements TaskRepository {
   }
 
   @override
+  Future<void> updateMicroMilestone(
+    String milestoneId, {
+    String? title,
+    int? durationMinutes,
+  }) async {
+    final idx = _milestones.indexWhere((m) => m.id == milestoneId);
+    if (idx != -1) {
+      _milestones[idx] = _milestones[idx].copyWith(
+        title: title?.trim() ?? _milestones[idx].title,
+        durationMinutes: durationMinutes ?? _milestones[idx].durationMinutes,
+        updatedAt: DateTime.now(),
+      );
+      _notify();
+    }
+  }
+
+  @override
   Future<void> toggleMicroMilestone(String milestoneId, bool isDone) async {
     final idx = _milestones.indexWhere((m) => m.id == milestoneId);
     if (idx != -1) {

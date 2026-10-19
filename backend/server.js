@@ -385,12 +385,16 @@ app.post('/api/tasks/:id/milestones', authMiddleware, async (req, res) => {
 });
 
 app.patch('/api/milestones/:id', authMiddleware, async (req, res) => {
-  const { isDone, title } = req.body;
+  const { isDone, title, durationMinutes } = req.body;
   try {
     const result = await pool.query(
-      `UPDATE micro_milestones SET is_done = COALESCE($1, is_done), title = COALESCE($2, title), updated_at = NOW()
-       WHERE id = $3 AND user_id = $4 RETURNING *`,
-      [isDone, title, req.params.id, req.user.id]
+      `UPDATE micro_milestones
+       SET is_done = COALESCE($1, is_done),
+           title = COALESCE($2, title),
+           duration_minutes = COALESCE($3, duration_minutes),
+           updated_at = NOW()
+       WHERE id = $4 AND user_id = $5 RETURNING *`,
+      [isDone, title, durationMinutes, req.params.id, req.user.id]
     );
     res.json(result.rows[0]);
   } catch (err) {
