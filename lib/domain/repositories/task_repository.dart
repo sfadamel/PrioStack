@@ -13,9 +13,19 @@ class TaskWithMilestones {
   });
 
   double get completionRatio {
-    if (milestones.isEmpty) return task.status == TaskStackStatus.done.dbValue ? 1.0 : 0.0;
+    if (task.status == TaskStackStatus.done.dbValue) return 1.0;
+    if (milestones.isEmpty) return 0.0;
+
+    final totalMinutes = milestones.fold<int>(0, (sum, m) => sum + m.durationMinutes);
+    if (totalMinutes > 0) {
+      final doneMinutes = milestones
+          .where((m) => m.isDone)
+          .fold<int>(0, (sum, m) => sum + m.durationMinutes);
+      return (doneMinutes / totalMinutes).clamp(0.0, 1.0);
+    }
+
     final doneCount = milestones.where((m) => m.isDone).length;
-    return doneCount / milestones.length;
+    return (doneCount / milestones.length).clamp(0.0, 1.0);
   }
 
   int get completionPercent => (completionRatio * 100).round();

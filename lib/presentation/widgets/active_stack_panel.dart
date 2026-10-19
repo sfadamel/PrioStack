@@ -467,12 +467,12 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Fine barre de progression au sommet de la carte (2px)
+          // Fine barre de progression au sommet de la carte (proportionnelle à la durée des jalons)
           ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
             child: LinearProgressIndicator(
-              value: (item.completionPercent / 100).clamp(0.0, 1.0),
-              minHeight: 3,
+              value: item.completionRatio.clamp(0.0, 1.0),
+              minHeight: 4,
               backgroundColor: AppTheme.surfaceElevated,
               valueColor: AlwaysStoppedAnimation<Color>(accent),
             ),
@@ -527,10 +527,30 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
                       ),
                     ],
                     const Spacer(),
+                    // Mini-barre de progression proportionnelle
+                    SizedBox(
+                      width: 54,
+                      height: 5,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(3),
+                        child: LinearProgressIndicator(
+                          value: item.completionRatio.clamp(0.0, 1.0),
+                          backgroundColor: AppTheme.surfaceElevated,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            item.completionPercent == 100
+                                ? AppTheme.neonGreen
+                                : accent,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     Text(
                       '${item.completionPercent}% complété',
                       style: TextStyle(
-                        color: AppTheme.textMuted,
+                        color: item.completionPercent == 100
+                            ? AppTheme.neonGreen
+                            : AppTheme.textMuted,
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                       ),
