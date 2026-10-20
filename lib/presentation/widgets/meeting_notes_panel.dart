@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
+import '../../domain/models/calendar_event.dart';
 import '../../domain/models/meeting_note.dart';
 import '../providers/meeting_notes_provider.dart';
+import '../providers/priostack_providers.dart';
 
 class MeetingNotesPanel extends ConsumerStatefulWidget {
   const MeetingNotesPanel({super.key});
@@ -21,6 +23,7 @@ class _MeetingNotesPanelState extends ConsumerState<MeetingNotesPanel> {
 
   String? _currentEditingId;
   String _searchQuery = '';
+  bool _mobileShowEditor = true;
 
   @override
   void dispose() {
@@ -66,31 +69,66 @@ class _MeetingNotesPanelState extends ConsumerState<MeetingNotesPanel> {
       builder: (context, constraints) {
         final isDesktop = constraints.maxWidth >= 850;
 
-        return Container(
-          decoration: BoxDecoration(
-            color: AppTheme.surfaceCard,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppTheme.borderSubtle),
-          ),
-          child: Row(
-            children: [
-              // 1. Barre Latérale : Historique des Réunions & Recherche
-              SizedBox(
-                width: isDesktop ? 290 : 230,
-                child: _buildSidebar(context, filteredMeetings, state.activeMeeting),
-              ),
+        if (isDesktop) {
+          // Disposition Desktop : 2 colonnes côte-à-côte
+          return Container(
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceCard,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppTheme.borderSubtle),
+            ),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 280,
+                  child: _buildSidebar(
+                    context,
+                    filteredMeetings,
+                    state.activeMeeting,
+                    isMobile: false,
+                  ),
+                ),
+                const VerticalDivider(width: 1),
+                Expanded(
+                  child: state.activeMeeting == null
+                      ? _buildEmptyState()
+                      : _buildEditor(
+                          context,
+                          state.activeMeeting!,
+                          state.isSaving,
+                          state.lastSavedAt,
+                          isMobile: false,
+                        ),
+                ),
+              ],
+            ),
+          );
+        } else {
+          // Disposition Mobile : Bascule fluide Liste <-> Éditeur
+          final showEditor = _mobileShowEditor && state.activeMeeting != null;
 
-              const VerticalDivider(width: 1),
-
-              // 2. Zone Éditeur Principal de Prise de Note
-              Expanded(
-                child: state.activeMeeting == null
-                    ? _buildEmptyState()
-                    : _buildEditor(context, state.activeMeeting!, state.isSaving, state.lastSavedAt),
-              ),
-            ],
-          ),
-        );
+          return Container(
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceCard,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppTheme.borderSubtle),
+            ),
+            child: showEditor
+                ? _buildEditor(
+                    context,
+                    state.activeMeeting!,
+                    state.isSaving,
+                    state.lastSavedAt,
+                    isMobile: true,
+                  )
+                : _buildSidebar(
+                    context,
+                    filteredMeetings,
+                    state.activeMeeting,
+                    isMobile: true,
+                  ),
+          );
+        }
       },
     );
   }
@@ -98,8 +136,9 @@ class _MeetingNotesPanelState extends ConsumerState<MeetingNotesPanel> {
   Widget _buildSidebar(
     BuildContext context,
     List<MeetingNote> meetings,
-    MeetingNote? active,
-  ) {
+    MeetingNote? active, {
+    bool isMobile = false,
+  }) {
     return Container(
       color: AppTheme.bgDeep.withValues(alpha: 0.5),
       child: Column(
@@ -120,6 +159,9 @@ class _MeetingNotesPanelState extends ConsumerState<MeetingNotesPanel> {
                   ),
                   onPressed: () async {
                     await ref.read(meetingNotesProvider.notifier).createNewMeeting();
+                    if (isMobile) {
+                      setState(() => _mobileShowEditor = true);
+                    }
                   },
                   icon: const Icon(Icons.add_rounded, size: 18),
                   label: const Text(
@@ -181,6 +223,9 @@ class _MeetingNotesPanelState extends ConsumerState<MeetingNotesPanel> {
                       return InkWell(
                         onTap: () {
                           ref.read(meetingNotesProvider.notifier).selectMeeting(m);
+                          if (isMobile) {
+                            setState(() => _mobileShowEditor = true);
+                          }
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -234,15 +279,37 @@ class _MeetingNotesPanelState extends ConsumerState<MeetingNotesPanel> {
                                 const SizedBox(height: 4),
                                 Row(
                                   children: [
-                                    Icon(Icons.check_circle_outline_rounded,
+                                    const Icon(Icons.check_circle_outline_rounded,
                                         size: 11, color: AppTheme.neonAmber),
                                     const SizedBox(width: 4),
                                     Text(
                                       '${m.actionItems.length} action(s)',
-                                      style: TextStyle(
+                                      style: const TextStyle(
                                         color: AppTheme.neonAmber,
                                         fontSize: 10,
                                         fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                              if (m.calendarEventId != null) ...[
+                                const SizedBox(height: 4),
+                                const Row(
+                                  children: [
+                                    Icon(Icons.event_available_rounded,
+                                        size: 11, color: AppTheme.neonCyan),
+                                    SizedBox(width: 4),
+                                    Expanded(
+                                      child: Text(
+                                        '🗓️ Lié au RDV',
+                                        style: TextStyle(
+                                          color: AppTheme.neonCyan,
+                                          fontSize: 9.5,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
                                   ],
@@ -264,16 +331,44 @@ class _MeetingNotesPanelState extends ConsumerState<MeetingNotesPanel> {
     BuildContext context,
     MeetingNote meeting,
     bool isSaving,
-    DateTime? lastSaved,
-  ) {
+    DateTime? lastSaved, {
+    bool isMobile = false,
+  }) {
     return Padding(
-      padding: const EdgeInsets.all(18),
+      padding: EdgeInsets.all(isMobile ? 12 : 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Barre Supérieure de l'Éditeur : Indicateur Auto-Save + Modèles + Exporter + Supprimer
           Row(
             children: [
+              if (isMobile) ...[
+                InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () => setState(() => _mobileShowEditor = false),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surfaceElevated,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppTheme.borderHighlight),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.arrow_back_rounded, size: 14),
+                        SizedBox(width: 4),
+                        Text(
+                          'Liste',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+
               // Indicateur Auto-save dynamique
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -301,8 +396,8 @@ class _MeetingNotesPanelState extends ConsumerState<MeetingNotesPanel> {
                     const SizedBox(width: 6),
                     Text(
                       isSaving
-                          ? 'Enregistrement automatique...'
-                          : 'Sauvegardé automatiquement',
+                          ? (isMobile ? 'Sauvegarde...' : 'Enregistrement automatique...')
+                          : (isMobile ? 'Sauvegardé' : 'Sauvegardé automatiquement'),
                       style: TextStyle(
                         color: isSaving ? AppTheme.neonAmber : AppTheme.neonGreen,
                         fontSize: 10.5,
@@ -314,6 +409,81 @@ class _MeetingNotesPanelState extends ConsumerState<MeetingNotesPanel> {
               ),
 
               const Spacer(),
+
+              // Lier à un rendez-vous (si pas encore lié)
+              if (meeting.calendarEventId == null) ...[
+                PopupMenuButton<CalendarEventItem>(
+                  tooltip: 'Associer cette note à un rendez-vous de l\'agenda',
+                  color: AppTheme.surfaceElevated,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    side: BorderSide(color: AppTheme.borderHighlight),
+                  ),
+                  onSelected: (event) {
+                    ref.read(meetingNotesProvider.notifier).updateActiveMeeting(
+                          calendarEventId: event.id,
+                          calendarEventTitle: event.title,
+                        );
+                  },
+                  itemBuilder: (ctx) {
+                    final events = ref.read(calendarEventsProvider).value ?? [];
+                    if (events.isEmpty) {
+                      return [
+                        const PopupMenuItem(
+                          enabled: false,
+                          child: Text('Aucun événement disponible',
+                              style: TextStyle(fontSize: 12)),
+                        ),
+                      ];
+                    }
+                    return events.take(12).map((ev) {
+                      return PopupMenuItem<CalendarEventItem>(
+                        value: ev,
+                        child: Row(
+                          children: [
+                            Icon(ev.category.icon,
+                                size: 14, color: ev.category.accentColor),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '${ev.title} (${ev.startTime.day.toString().padLeft(2, '0')}/${ev.startTime.month.toString().padLeft(2, '0')})',
+                                style: const TextStyle(fontSize: 12),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList();
+                  },
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.neonCyan.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                          color: AppTheme.neonCyan.withValues(alpha: 0.4)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.link_rounded,
+                            size: 13, color: AppTheme.neonCyan),
+                        SizedBox(width: 4),
+                        Text(
+                          'Lier au RDV',
+                          style: TextStyle(
+                            color: AppTheme.neonCyan,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
 
               // Modèles de Réunions rapides
               PopupMenuButton<String>(
@@ -416,6 +586,69 @@ class _MeetingNotesPanelState extends ConsumerState<MeetingNotesPanel> {
             ],
           ),
           const SizedBox(height: 12),
+
+          // Bannière Rendez-vous associé (si lié à un événement du calendrier)
+          if (meeting.calendarEventId != null) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppTheme.neonCyan.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(
+                    color: AppTheme.neonCyan.withValues(alpha: 0.35)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.event_available_rounded,
+                      size: 16, color: AppTheme.neonCyan),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '🗓️ Lié au rendez-vous : ${meeting.calendarEventTitle ?? meeting.title}',
+                      style: const TextStyle(
+                        color: AppTheme.neonCyan,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  TextButton.icon(
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      foregroundColor: AppTheme.neonCyan,
+                    ),
+                    onPressed: () {
+                      ref
+                          .read(selectedCalendarDateProvider.notifier)
+                          .selectDate(meeting.meetingDate);
+                      ref
+                          .read(cockpitMainViewProvider.notifier)
+                          .setView(CockpitMainView.calendar);
+                    },
+                    icon: const Icon(Icons.arrow_forward_rounded, size: 13),
+                    label: const Text(
+                      'Voir dans l\'agenda',
+                      style: TextStyle(fontSize: 11),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Délier du rendez-vous',
+                    icon: const Icon(Icons.link_off_rounded, size: 16),
+                    color: AppTheme.textMuted,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () {
+                      ref
+                          .read(meetingNotesProvider.notifier)
+                          .unlinkCalendarEvent();
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
 
           // Titre de la réunion (Gros champ épuré)
           TextField(

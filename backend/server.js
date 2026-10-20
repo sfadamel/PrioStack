@@ -887,7 +887,13 @@ app.post('/api/backup/import', authMiddleware, async (req, res) => {
 app.get('/api/meetings', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, title, meeting_date, participants, content, action_items, created_at, updated_at FROM meeting_notes WHERE user_id = $1 ORDER BY updated_at DESC',
+      `SELECT m.id, m.title, m.meeting_date, m.participants, m.content, m.action_items,
+              m.calendar_event_id, m.created_at, m.updated_at,
+              ce.title AS calendar_event_title, ce.start_time AS calendar_event_start
+       FROM meeting_notes m
+       LEFT JOIN calendar_events ce ON m.calendar_event_id = ce.id
+       WHERE m.user_id = $1
+       ORDER BY m.updated_at DESC`,
       [req.user.id]
     );
     res.json({ meetings: result.rows });
@@ -899,20 +905,25 @@ app.get('/api/meetings', authMiddleware, async (req, res) => {
 
 // Créer ou enregistrer une nouvelle réunion
 app.post('/api/meetings', authMiddleware, async (req, res) => {
-  const { id, title, meetingDate, participants, content, actionItems } = req.body;
+  const { id, title, meetingDate, participants, content, actionItems, calendarEventId } = req.body;
+  const isValidUuid = (str) => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+  const safeId = isValidUuid(id) ? id : null;
+  const safeEventId = isValidUuid(calendarEventId) ? calendarEventId : null;
+
   try {
     const insert = await pool.query(
-      `INSERT INTO meeting_notes (id, user_id, title, meeting_date, participants, content, action_items)
-       VALUES (COALESCE($1, gen_random_uuid()), $2, $3, COALESCE($4, NOW()), $5, $6, $7)
-       RETURNING id, title, meeting_date, participants, content, action_items, created_at, updated_at`,
+      `INSERT INTO meeting_notes (id, user_id, title, meeting_date, participants, content, action_items, calendar_event_id)
+       VALUES (COALESCE($1, gen_random_uuid()), $2, $3, COALESCE($4, NOW()), $5, $6, $7, $8)
+       RETURNING id, title, meeting_date, participants, content, action_items, calendar_event_id, created_at, updated_at`,
       [
-        id || null,
+        safeId,
         req.user.id,
         title || 'Nouvelle Réunion',
         meetingDate || new Date(),
         participants || '',
         content || '',
-        JSON.stringify(actionItems || [])
+        JSON.stringify(actionItems || []),
+        safeEventId
       ]
     );
     res.status(201).json({ meeting: insert.rows[0] });
@@ -924,28 +935,37 @@ app.post('/api/meetings', authMiddleware, async (req, res) => {
 
 // Mettre à jour / Sauvegarde automatique d'une réunion
 app.put('/api/meetings/:id', authMiddleware, async (req, res) => {
-  const { title, meetingDate, participants, content, actionItems } = req.body;
+  const { title, meetingDate, participants, content, actionItems, calendarEventId } = req.body;
+  const isValidUuid = (str) => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+  const targetId = isValidUuid(req.params.id) ? req.params.id : null;
+  if (!targetId) {
+    return res.status(400).json({ error: 'ID de réunion invalide' });
+  }
+  const safeEventId = isValidUuid(calendarEventId) ? calendarEventId : null;
+
   try {
     const update = await pool.query(
-      `INSERT INTO meeting_notes (id, user_id, title, meeting_date, participants, content, action_items, updated_at)
-       VALUES ($1, $2, $3, COALESCE($4, NOW()), $5, $6, $7, NOW())
+      `INSERT INTO meeting_notes (id, user_id, title, meeting_date, participants, content, action_items, calendar_event_id, updated_at)
+       VALUES ($1, $2, $3, COALESCE($4, NOW()), $5, $6, $7, $8, NOW())
        ON CONFLICT (id) DO UPDATE SET
          title = EXCLUDED.title,
          meeting_date = EXCLUDED.meeting_date,
          participants = EXCLUDED.participants,
          content = EXCLUDED.content,
          action_items = EXCLUDED.action_items,
+         calendar_event_id = EXCLUDED.calendar_event_id,
          updated_at = NOW()
        WHERE meeting_notes.user_id = $2
-       RETURNING id, title, meeting_date, participants, content, action_items, created_at, updated_at`,
+       RETURNING id, title, meeting_date, participants, content, action_items, calendar_event_id, created_at, updated_at`,
       [
-        req.params.id,
+        targetId,
         req.user.id,
         title || 'Réunion sans titre',
         meetingDate || new Date(),
         participants || '',
         content || '',
-        JSON.stringify(actionItems || [])
+        JSON.stringify(actionItems || []),
+        safeEventId
       ]
     );
 

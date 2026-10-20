@@ -5,6 +5,8 @@ import '../../data/local/drift/app_database.dart';
 import '../../domain/models/calendar_event.dart';
 import '../../domain/models/task_enums.dart';
 import '../../domain/repositories/task_repository.dart';
+import '../local/memory/web_storage_stub.dart'
+    if (dart.library.html) '../local/memory/web_storage_html.dart';
 
 /// Implémentation Cloud du TaskRepository connectée directement à Neon.tech via l'API REST
 class NeonCloudTaskRepository implements TaskRepository {
@@ -12,21 +14,53 @@ class NeonCloudTaskRepository implements TaskRepository {
   final String Function() getToken;
 
   final _changeController = StreamController<void>.broadcast();
+  Timer? _pollingTimer;
+  StreamSubscription? _tabSyncSub;
+
+  List<TaskWithMilestones>? _cachedTasks;
+  DateTime? _lastTasksFetchTime;
+  Future<List<TaskWithMilestones>>? _inFlightTasksFetch;
 
   NeonCloudTaskRepository({
     required this.baseUrl,
     required this.getToken,
-  });
+  }) {
+    // 1. Écoute instantanée inter-onglets (BroadcastChannel Web)
+    _tabSyncSub = onSyncEvent(() {
+      _cachedTasks = null;
+      _notifyLocal();
+    });
+
+    // 2. Polling d'arrière-plan toutes les 3.5s pour la synchronisation temps réel
+    // entre différents postes/mobiles/écrans connectés au même compte Neon
+    _pollingTimer = Timer.periodic(const Duration(milliseconds: 3500), (_) {
+      _cachedTasks = null;
+      _notifyLocal();
+    });
+  }
+
+  void dispose() {
+    _pollingTimer?.cancel();
+    _tabSyncSub?.cancel();
+    _changeController.close();
+  }
 
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ${getToken()}',
       };
 
-  void _notify() {
+  void _notifyLocal() {
     if (!_changeController.isClosed) {
       _changeController.add(null);
     }
+  }
+
+  void _notify() {
+    _cachedTasks = null;
+    _notifyLocal();
+    // Notifier immédiatement les autres onglets ouverts sur la même machine
+    broadcastSyncEvent('mutation');
   }
 
   Stream<T> _reactiveStream<T>(Future<T> Function() fetcher) async* {
@@ -105,9 +139,33 @@ class NeonCloudTaskRepository implements TaskRepository {
   }
 
   // --- TÂCHES & CALL STACK ---
-  Future<List<TaskWithMilestones>> _fetchTasks() async {
+  Future<List<TaskWithMilestones>> _fetchTasks({bool forceRefresh = false}) async {
+    final now = DateTime.now();
+    if (!forceRefresh &&
+        _cachedTasks != null &&
+        _lastTasksFetchTime != null &&
+        now.difference(_lastTasksFetchTime!).inMilliseconds < 1200) {
+      return _cachedTasks!;
+    }
+    if (_inFlightTasksFetch != null) {
+      return await _inFlightTasksFetch!;
+    }
+    _inFlightTasksFetch = _rawFetchTasks();
     try {
-      final resp = await http.get(Uri.parse('$baseUrl/tasks'), headers: _headers);
+      final res = await _inFlightTasksFetch!;
+      _cachedTasks = res;
+      _lastTasksFetchTime = DateTime.now();
+      return res;
+    } finally {
+      _inFlightTasksFetch = null;
+    }
+  }
+
+  Future<List<TaskWithMilestones>> _rawFetchTasks() async {
+    try {
+      final resp = await http
+          .get(Uri.parse('$baseUrl/tasks'), headers: _headers)
+          .timeout(const Duration(seconds: 8));
       if (resp.statusCode == 200) {
         final list = jsonDecode(resp.body) as List;
         return list.map((item) {
@@ -268,7 +326,7 @@ class NeonCloudTaskRepository implements TaskRepository {
     String? externalRef,
     int criticality = 3,
   }) async {
-    await http.post(
+    final resp = await http.post(
       Uri.parse('$baseUrl/tasks/push-interruption'),
       headers: _headers,
       body: jsonEncode({
@@ -277,8 +335,11 @@ class NeonCloudTaskRepository implements TaskRepository {
         'newUrgencyTitle': newUrgencyTitle,
         'externalRef': externalRef,
       }),
-    );
+    ).timeout(const Duration(seconds: 10));
     _notify();
+    if (resp.statusCode >= 400) {
+      throw Exception('Erreur serveur lors du PUSH (${resp.statusCode})');
+    }
   }
 
   @override
@@ -332,8 +393,28 @@ class NeonCloudTaskRepository implements TaskRepository {
   }
 
   @override
-  Future<void> recordFocusTick(String taskId, int deltaSeconds) async {
-    // Économie de requêtes sur le tick 1s
+  Future<void> recordFocusTick(String taskId, int deltaOrTotalSeconds) async {
+    try {
+      int newElapsed = deltaOrTotalSeconds;
+      if (_cachedTasks != null) {
+        final idx = _cachedTasks!.indexWhere((t) => t.task.id == taskId);
+        if (idx != -1) {
+          final old = _cachedTasks![idx];
+          newElapsed = (deltaOrTotalSeconds >= old.task.elapsedSeconds)
+              ? deltaOrTotalSeconds
+              : (old.task.elapsedSeconds + deltaOrTotalSeconds);
+          _cachedTasks![idx] = TaskWithMilestones(
+            task: old.task.copyWith(elapsedSeconds: newElapsed),
+            milestones: old.milestones,
+          );
+        }
+      }
+      await http.patch(
+        Uri.parse('$baseUrl/tasks/$taskId'),
+        headers: _headers,
+        body: jsonEncode({'elapsedSeconds': newElapsed}),
+      ).timeout(const Duration(seconds: 5));
+    } catch (_) {}
   }
 
   @override

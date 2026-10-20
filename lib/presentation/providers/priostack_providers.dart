@@ -127,22 +127,30 @@ final stackMetricsProvider = StreamProvider<StackMetrics>((ref) {
 class FocusTimerState {
   final bool isRunning;
   final String? activeTaskId;
+  final int initialElapsedSeconds;
   final int sessionSeconds;
 
   const FocusTimerState({
     this.isRunning = false,
     this.activeTaskId,
+    this.initialElapsedSeconds = 0,
     this.sessionSeconds = 0,
   });
+
+  /// Total cumulé réel et ininterrompu du temps passé sur la tâche
+  int get currentTotalSeconds => initialElapsedSeconds + sessionSeconds;
 
   FocusTimerState copyWith({
     bool? isRunning,
     String? activeTaskId,
+    int? initialElapsedSeconds,
     int? sessionSeconds,
   }) {
     return FocusTimerState(
       isRunning: isRunning ?? this.isRunning,
       activeTaskId: activeTaskId ?? this.activeTaskId,
+      initialElapsedSeconds:
+          initialElapsedSeconds ?? this.initialElapsedSeconds,
       sessionSeconds: sessionSeconds ?? this.sessionSeconds,
     );
   }
@@ -151,7 +159,7 @@ class FocusTimerState {
 /// Notifier Riverpod 2 gérant le Chronomètre Focus et sa mise en pause automatique lors d'un PUSH
 class FocusTimerNotifier extends Notifier<FocusTimerState> {
   Timer? _ticker;
-  int _unsavedTicks = 0;
+  int _ticksSinceLastSave = 0;
 
   @override
   FocusTimerState build() {
@@ -161,42 +169,53 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
     return const FocusTimerState();
   }
 
-  void toggleTimer(String taskId) {
+  void toggleTimer(String taskId, {int initialElapsed = 0}) {
     if (state.isRunning && state.activeTaskId == taskId) {
       pauseTimer();
     } else {
-      startTimer(taskId);
+      startTimer(taskId, initialElapsed: initialElapsed);
     }
   }
 
-  void startTimer(String taskId) {
+  void startTimer(String taskId, {int initialElapsed = 0}) {
     _ticker?.cancel();
+    final startBase = (state.activeTaskId == taskId)
+        ? state.currentTotalSeconds
+        : initialElapsed;
+
     state = FocusTimerState(
       isRunning: true,
       activeTaskId: taskId,
-      sessionSeconds: state.activeTaskId == taskId ? state.sessionSeconds : 0,
+      initialElapsedSeconds: startBase,
+      sessionSeconds: 0,
     );
+    _ticksSinceLastSave = 0;
 
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       state = state.copyWith(sessionSeconds: state.sessionSeconds + 1);
-      _unsavedTicks++;
-      // Persistance toutes les 5 secondes dans SQLite via Drift pour mettre à jour la jauge temps réel
-      if (_unsavedTicks >= 5 && state.activeTaskId != null) {
-        final toFlush = _unsavedTicks;
-        _unsavedTicks = 0;
-        ref.read(taskRepositoryProvider).recordFocusTick(state.activeTaskId!, toFlush);
+      _ticksSinceLastSave++;
+      // Sauvegarde périodique toutes les 10 secondes pour sécuriser en cas de fermeture
+      if (_ticksSinceLastSave >= 10 && state.activeTaskId != null) {
+        final currentTotal = state.currentTotalSeconds;
+        _ticksSinceLastSave = 0;
+        ref.read(taskRepositoryProvider).recordFocusTick(state.activeTaskId!, currentTotal);
       }
     });
   }
 
   Future<void> pauseTimer() async {
     _ticker?.cancel();
-    if (_unsavedTicks > 0 && state.activeTaskId != null) {
-      final toFlush = _unsavedTicks;
-      _unsavedTicks = 0;
-      await ref.read(taskRepositoryProvider).recordFocusTick(state.activeTaskId!, toFlush);
+    if (state.activeTaskId != null) {
+      final currentTotal = state.currentTotalSeconds;
+      await ref.read(taskRepositoryProvider).recordFocusTick(state.activeTaskId!, currentTotal);
+      state = state.copyWith(
+        isRunning: false,
+        initialElapsedSeconds: currentTotal,
+        sessionSeconds: 0,
+      );
+    } else {
+      state = state.copyWith(isRunning: false);
     }
-    state = state.copyWith(isRunning: false);
   }
 }
 

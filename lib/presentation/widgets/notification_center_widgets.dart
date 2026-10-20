@@ -100,36 +100,38 @@ class GlobalNotificationBanner extends ConsumerWidget {
           ),
         ],
       ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(banner.type.icon, size: 18, color: accent),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isCompact = constraints.maxWidth < 640;
+
+          if (isCompact) {
+            return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
                 Row(
                   children: [
                     Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(banner.type.icon, size: 16, color: accent),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 7, vertical: 2),
+                          horizontal: 6, vertical: 1.5),
                       decoration: BoxDecoration(
                         color: accent.withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(5),
                       ),
                       child: Text(
                         banner.type.badgeLabel,
                         style: TextStyle(
                           color: accent,
-                          fontSize: 10,
+                          fontSize: 9.5,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -142,95 +144,236 @@ class GlobalNotificationBanner extends ConsumerWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: AppTheme.textPrimary,
-                          fontSize: 13,
+                          fontSize: 12.5,
                           fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () => ref
+                          .read(appNotificationsProvider.notifier)
+                          .dismissActiveBanner(),
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 17,
+                          color: AppTheme.textMuted,
                         ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 4),
                 Text(
                   banner.body,
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: AppTheme.textSecondary,
                     fontSize: 11.5,
                   ),
                 ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    if (isCalendarRelated) ...[
+                      InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () {
+                          ref
+                              .read(appNotificationsProvider.notifier)
+                              .markAsRead(banner.id);
+                          ref
+                              .read(appNotificationsProvider.notifier)
+                              .dismissActiveBanner();
+                          ref
+                              .read(cockpitMainViewProvider.notifier)
+                              .setView(CockpitMainView.calendar);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 9, vertical: 4.5),
+                          decoration: BoxDecoration(
+                            color: accent.withValues(alpha: 0.16),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                                color: accent.withValues(alpha: 0.5)),
+                          ),
+                          child: Text(
+                            'Voir Agenda',
+                            style: TextStyle(
+                              color: accent,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () => showNotificationCenterDialog(context, ref),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 9, vertical: 4.5),
+                        decoration: BoxDecoration(
+                          color: AppTheme.surfaceElevated,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'Centre (${notifState.unreadCount})',
+                          style: TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          if (isCalendarRelated)
-            InkWell(
-              borderRadius: BorderRadius.circular(9),
-              onTap: () {
-                ref
-                    .read(appNotificationsProvider.notifier)
-                    .markAsRead(banner.id);
-                ref
-                    .read(appNotificationsProvider.notifier)
-                    .dismissActiveBanner();
-                ref
-                    .read(cockpitMainViewProvider.notifier)
-                    .setView(CockpitMainView.calendar);
-              },
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            );
+          }
+
+          return Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: accent.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(9),
-                  border: Border.all(color: accent.withValues(alpha: 0.5)),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: Text(
-                  'Voir Agenda',
-                  style: TextStyle(
-                    color: accent,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
+                child: Icon(banner.type.icon, size: 18, color: accent),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: accent.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            banner.type.badgeLabel,
+                            style: TextStyle(
+                              color: accent,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            banner.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AppTheme.textPrimary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      banner.body,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              if (isCalendarRelated)
+                InkWell(
+                  borderRadius: BorderRadius.circular(9),
+                  onTap: () {
+                    ref
+                        .read(appNotificationsProvider.notifier)
+                        .markAsRead(banner.id);
+                    ref
+                        .read(appNotificationsProvider.notifier)
+                        .dismissActiveBanner();
+                    ref
+                        .read(cockpitMainViewProvider.notifier)
+                        .setView(CockpitMainView.calendar);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.16),
+                      borderRadius: BorderRadius.circular(9),
+                      border: Border.all(color: accent.withValues(alpha: 0.5)),
+                    ),
+                    child: Text(
+                      'Voir Agenda',
+                      style: TextStyle(
+                        color: accent,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              const SizedBox(width: 8),
+              InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => showNotificationCenterDialog(context, ref),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceElevated,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Centre (${notifState.unreadCount})',
+                    style: TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
-            ),
-          const SizedBox(width: 8),
-          InkWell(
-            borderRadius: BorderRadius.circular(8),
-            onTap: () => showNotificationCenterDialog(context, ref),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppTheme.surfaceElevated,
+              const SizedBox(width: 6),
+              InkWell(
                 borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                'Centre (${notifState.unreadCount})',
-                style: TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
+                onTap: () => ref
+                    .read(appNotificationsProvider.notifier)
+                    .dismissActiveBanner(),
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(
+                    Icons.close_rounded,
+                    size: 17,
+                    color: AppTheme.textMuted,
+                  ),
                 ),
               ),
-            ),
-          ),
-          const SizedBox(width: 6),
-          InkWell(
-            borderRadius: BorderRadius.circular(8),
-            onTap: () => ref
-                .read(appNotificationsProvider.notifier)
-                .dismissActiveBanner(),
-            child: Padding(
-              padding: const EdgeInsets.all(4),
-              child: Icon(
-                Icons.close_rounded,
-                size: 17,
-                color: AppTheme.textMuted,
-              ),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -255,70 +398,109 @@ Future<void> showNotificationCenterDialog(
               borderRadius: BorderRadius.circular(20),
               side: BorderSide(color: AppTheme.borderHighlight),
             ),
-            title: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppTheme.neonAmber.withValues(alpha: 0.16),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.notifications_active_rounded,
-                    color: AppTheme.neonAmber,
-                    size: 19,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
+            title: LayoutBuilder(
+              builder: (tCtx, tConstraints) {
+                final isNarrow = tConstraints.maxWidth < 480;
+
+                final headerInfo = Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.neonAmber.withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.notifications_active_rounded,
+                        color: AppTheme.neonAmber,
+                        size: 19,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Notifications PrioStack',
+                            style: TextStyle(
+                              color: AppTheme.textPrimary,
+                              fontSize: 15.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          Text(
+                            'Alertes réunions, clôtures, PUSH & POP',
+                            style: TextStyle(
+                              color: AppTheme.textSecondary,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+
+                final actionButtons = items.isEmpty
+                    ? const SizedBox.shrink()
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TextButton.icon(
+                            onPressed: () => cRef
+                                .read(appNotificationsProvider.notifier)
+                                .markAllAsRead(),
+                            icon: const Icon(Icons.done_all_rounded, size: 14),
+                            label: const Text(
+                              'Tout lire',
+                              style: TextStyle(fontSize: 11.5),
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: () => cRef
+                                .read(appNotificationsProvider.notifier)
+                                .clearAll(),
+                            icon: const Icon(Icons.delete_sweep_outlined,
+                                size: 14),
+                            label: const Text(
+                              'Vider',
+                              style: TextStyle(fontSize: 11.5),
+                            ),
+                          ),
+                        ],
+                      );
+
+                if (isNarrow) {
+                  return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        'Centre de Notifications PrioStack',
-                        style: TextStyle(
-                          color: AppTheme.textPrimary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      Text(
-                        'Alertes réunions, clôtures automatiques, PUSH & POP de la pile',
-                        style: TextStyle(
-                          color: AppTheme.textSecondary,
-                          fontSize: 11.5,
-                        ),
-                      ),
+                      headerInfo,
+                      if (items.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        actionButtons,
+                      ],
                     ],
-                  ),
-                ),
-                if (items.isNotEmpty) ...[
-                  TextButton.icon(
-                    onPressed: () => cRef
-                        .read(appNotificationsProvider.notifier)
-                        .markAllAsRead(),
-                    icon: const Icon(Icons.done_all_rounded, size: 15),
-                    label: const Text(
-                      'Tout lire',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                  ),
-                  TextButton.icon(
-                    onPressed: () =>
-                        cRef.read(appNotificationsProvider.notifier).clearAll(),
-                    icon: const Icon(Icons.delete_sweep_outlined, size: 15),
-                    label: const Text(
-                      'Vider',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                  ),
-                ],
-              ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Expanded(child: headerInfo),
+                    actionButtons,
+                  ],
+                );
+              },
             ),
-            content: SizedBox(
-              width: 560,
-              height: 420,
-              child: items.isEmpty
+            content: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: 560,
+                maxHeight: MediaQuery.sizeOf(ctx).height * 0.7,
+              ),
+              child: SizedBox(
+                width: double.maxFinite,
+                child: items.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -467,6 +649,7 @@ Future<void> showNotificationCenterDialog(
                         );
                       },
                     ),
+              ),
             ),
             actions: [
               TextButton(

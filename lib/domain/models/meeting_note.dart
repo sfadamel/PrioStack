@@ -8,6 +8,8 @@ class MeetingNote {
   final String participants;
   final String content;
   final List<String> actionItems;
+  final String? calendarEventId;
+  final String? calendarEventTitle;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -18,6 +20,8 @@ class MeetingNote {
     this.participants = '',
     this.content = '',
     this.actionItems = const [],
+    this.calendarEventId,
+    this.calendarEventTitle,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -29,6 +33,9 @@ class MeetingNote {
     String? participants,
     String? content,
     List<String>? actionItems,
+    String? calendarEventId,
+    bool clearCalendarEventId = false,
+    String? calendarEventTitle,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -39,6 +46,11 @@ class MeetingNote {
       participants: participants ?? this.participants,
       content: content ?? this.content,
       actionItems: actionItems ?? this.actionItems,
+      calendarEventId:
+          clearCalendarEventId ? null : (calendarEventId ?? this.calendarEventId),
+      calendarEventTitle: clearCalendarEventId
+          ? null
+          : (calendarEventTitle ?? this.calendarEventTitle),
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -64,16 +76,26 @@ class MeetingNote {
       title: json['title']?.toString() ?? 'Réunion sans titre',
       meetingDate: json['meeting_date'] != null
           ? DateTime.tryParse(json['meeting_date'].toString()) ?? DateTime.now()
-          : DateTime.now(),
+          : (json['meetingDate'] != null
+              ? DateTime.tryParse(json['meetingDate'].toString()) ?? DateTime.now()
+              : DateTime.now()),
       participants: json['participants']?.toString() ?? '',
       content: json['content']?.toString() ?? '',
-      actionItems: parseActionItems(json['action_items']),
+      actionItems: parseActionItems(json['action_items'] ?? json['actionItems']),
+      calendarEventId: json['calendar_event_id']?.toString() ??
+          json['calendarEventId']?.toString(),
+      calendarEventTitle: json['calendar_event_title']?.toString() ??
+          json['calendarEventTitle']?.toString(),
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now()
-          : DateTime.now(),
+          : (json['createdAt'] != null
+              ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now()
+              : DateTime.now()),
       updatedAt: json['updated_at'] != null
           ? DateTime.tryParse(json['updated_at'].toString()) ?? DateTime.now()
-          : DateTime.now(),
+          : (json['updatedAt'] != null
+              ? DateTime.tryParse(json['updatedAt'].toString()) ?? DateTime.now()
+              : DateTime.now()),
     );
   }
 
@@ -85,6 +107,8 @@ class MeetingNote {
       'participants': participants,
       'content': content,
       'actionItems': actionItems,
+      'calendarEventId': calendarEventId,
+      'calendarEventTitle': calendarEventTitle,
       'updatedAt': updatedAt.toIso8601String(),
     };
   }

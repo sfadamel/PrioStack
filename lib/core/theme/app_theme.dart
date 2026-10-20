@@ -54,6 +54,7 @@ class AppTheme {
   // --- Accents sémantiques sobres et précis ---
   static const Color accentBlue = Color(0xFF3B82F6);
   static const Color accentIndigo = Color(0xFF6366F1);
+  static const Color neonCyan = Color(0xFF06B6D4);   // PrioStack Brand Cyan / Prise de note
   static const Color neonPink = Color(0xFFF43F5E);   // Urgence / Critique
   static const Color neonGreen = Color(0xFF10B981);  // Validé / En ligne / Déblocage Dev
   static const Color neonAmber = Color(0xFFF59E0B);  // Tâche de fond / Focus

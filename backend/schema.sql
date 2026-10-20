@@ -108,8 +108,10 @@ CREATE TABLE IF NOT EXISTS meeting_notes (
     participants TEXT DEFAULT '',
     content TEXT NOT NULL DEFAULT '',
     action_items JSONB DEFAULT '[]',
+    calendar_event_id UUID REFERENCES calendar_events(id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_meeting_notes_user ON meeting_notes(user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_meeting_notes_calendar_event ON meeting_notes(calendar_event_id);

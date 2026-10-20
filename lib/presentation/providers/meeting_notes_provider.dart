@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
+import 'package:uuid/uuid.dart';
 import '../../data/local/memory/web_storage_stub.dart'
     if (dart.library.html) '../../data/local/memory/web_storage_html.dart';
+import '../../domain/models/calendar_event.dart';
 import '../../domain/models/meeting_note.dart';
 import '../../domain/models/task_enums.dart';
 import 'auth_provider.dart';
@@ -102,20 +104,76 @@ class MeetingNotesNotifier extends StateNotifier<MeetingNotesState> {
     state = state.copyWith(activeMeeting: meeting);
   }
 
+  /// Récupère la note liée à un rendez-vous du calendrier ou en crée une nouvelle automatiquement
+  Future<MeetingNote> getOrCreateNoteForCalendarEvent(CalendarEventItem event) async {
+    // 1. Chercher si une note existante est déjà liée à cet événement
+    final existing = state.meetings
+        .cast<MeetingNote?>()
+        .firstWhere((m) => m?.calendarEventId == event.id, orElse: () => null);
+
+    if (existing != null) {
+      selectMeeting(existing);
+      return existing;
+    }
+
+    // 2. Créer une nouvelle note pré-remplie et associée à ce rendez-vous
+    final startStr =
+        '${event.startTime.hour.toString().padLeft(2, '0')}:${event.startTime.minute.toString().padLeft(2, '0')}';
+    final endStr =
+        '${event.endTime.hour.toString().padLeft(2, '0')}:${event.endTime.minute.toString().padLeft(2, '0')}';
+    final dateStr =
+        '${event.startTime.day.toString().padLeft(2, '0')}/${event.startTime.month.toString().padLeft(2, '0')}/${event.startTime.year}';
+
+    final buffer = StringBuffer();
+    buffer.writeln('### 🗓️ Rendez-vous : ${event.title}');
+    buffer.writeln('⏰ **Date & Horaire** : $dateStr de $startStr à $endStr');
+    if (event.participantsOrLocation != null &&
+        event.participantsOrLocation!.trim().isNotEmpty) {
+      buffer.writeln('📍 **Participants / Lieu** : ${event.participantsOrLocation}');
+    }
+    if (event.notes != null && event.notes!.trim().isNotEmpty) {
+      buffer.writeln('\n📋 **Ordre du jour / Contexte initial** :');
+      buffer.writeln(event.notes);
+    }
+    buffer.writeln('\n---\n');
+    buffer.writeln('#### ✍️ Discussions & Prises de notes :\n');
+    buffer.writeln('- \n');
+    buffer.writeln('#### 🎯 Décisions & Points clés :\n');
+    buffer.writeln('- \n');
+
+    final newNote = await createNewMeeting(
+      title: event.title,
+      template: buffer.toString(),
+      participants: event.participantsOrLocation ?? '',
+      calendarEventId: event.id,
+      calendarEventTitle: event.title,
+      meetingDate: event.startTime,
+    );
+
+    return newNote;
+  }
+
   Future<MeetingNote> createNewMeeting({
     String title = 'Nouvelle Réunion',
     String template = '',
+    String participants = '',
+    String? calendarEventId,
+    String? calendarEventTitle,
+    DateTime? meetingDate,
   }) async {
     _debounceTimer?.cancel();
-    final newId = 'm_${DateTime.now().millisecondsSinceEpoch}';
+    final newId = const Uuid().v4();
     final now = DateTime.now();
 
     final note = MeetingNote(
       id: newId,
       title: title,
-      meetingDate: now,
+      meetingDate: meetingDate ?? now,
+      participants: participants,
       content: template,
       actionItems: const [],
+      calendarEventId: calendarEventId,
+      calendarEventTitle: calendarEventTitle,
       createdAt: now,
       updatedAt: now,
     );
@@ -144,7 +202,8 @@ class MeetingNotesNotifier extends StateNotifier<MeetingNotesState> {
           final created = MeetingNote.fromJson(jsonDecode(res.body)['meeting']);
           state = state.copyWith(
             meetings: state.meetings.map((m) => m.id == newId ? created : m).toList(),
-            activeMeeting: state.activeMeeting?.id == newId ? created : state.activeMeeting,
+            activeMeeting:
+                state.activeMeeting?.id == newId ? created : state.activeMeeting,
             lastSavedAt: DateTime.now(),
           );
           return created;
@@ -162,6 +221,9 @@ class MeetingNotesNotifier extends StateNotifier<MeetingNotesState> {
     String? participants,
     String? content,
     List<String>? actionItems,
+    String? calendarEventId,
+    bool clearCalendarEventId = false,
+    String? calendarEventTitle,
   }) {
     final current = state.activeMeeting;
     if (current == null) return;
@@ -172,6 +234,9 @@ class MeetingNotesNotifier extends StateNotifier<MeetingNotesState> {
       participants: participants,
       content: content,
       actionItems: actionItems,
+      calendarEventId: calendarEventId,
+      clearCalendarEventId: clearCalendarEventId,
+      calendarEventTitle: calendarEventTitle,
       updatedAt: DateTime.now(),
     );
 
@@ -179,7 +244,8 @@ class MeetingNotesNotifier extends StateNotifier<MeetingNotesState> {
     _saveToLocalStorage(updated);
 
     // Mise à jour de l'état local
-    final updatedList = state.meetings.map((m) => m.id == updated.id ? updated : m).toList();
+    final updatedList =
+        state.meetings.map((m) => m.id == updated.id ? updated : m).toList();
     state = state.copyWith(
       activeMeeting: updated,
       meetings: updatedList,
@@ -191,6 +257,10 @@ class MeetingNotesNotifier extends StateNotifier<MeetingNotesState> {
     _debounceTimer = Timer(const Duration(milliseconds: 600), () {
       _syncToCloud(updated);
     });
+  }
+
+  void unlinkCalendarEvent() {
+    updateActiveMeeting(clearCalendarEventId: true);
   }
 
   void _saveToLocalStorage(MeetingNote note) {

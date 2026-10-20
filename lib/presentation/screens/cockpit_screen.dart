@@ -106,6 +106,8 @@ class _CockpitScreenState extends ConsumerState<CockpitScreen> {
                         ),
                         child: BottomNavigationBar(
                           type: BottomNavigationBarType.fixed,
+                          selectedFontSize: 11,
+                          unselectedFontSize: 10,
                           currentIndex: mainView == CockpitMainView.meetings
                               ? 4
                               : (mainView == CockpitMainView.calendar
@@ -133,35 +135,28 @@ class _CockpitScreenState extends ConsumerState<CockpitScreen> {
                           items: const [
                             BottomNavigationBarItem(
                               icon: Icon(Icons.checklist_rtl_rounded),
-                              label: 'Morning Check',
+                              label: 'Morning',
                             ),
                             BottomNavigationBarItem(
                               icon: Icon(Icons.layers_rounded),
-                              label: 'Pile Active',
+                              label: 'Pile',
                             ),
                             BottomNavigationBarItem(
                               icon: Icon(Icons.shield_moon_rounded),
-                              label: 'Triage & Assistance',
+                              label: 'Triage',
                             ),
                             BottomNavigationBarItem(
                               icon: Icon(Icons.calendar_month_rounded),
-                              label: 'Calendrier',
+                              label: 'Agenda',
                             ),
                             BottomNavigationBarItem(
                               icon: Icon(Icons.edit_note_rounded),
-                              label: 'Réunions',
+                              label: 'Notes',
                             ),
                           ],
                         ),
                       ),
-                floatingActionButton: isDesktop
-                    ? null
-                    : FloatingActionButton(
-                        backgroundColor: AppTheme.accentBlue,
-                        onPressed: _focusQuickCapture,
-                        tooltip: 'Capture Éclair',
-                        child: const Icon(Icons.bolt_rounded, color: Colors.white),
-                      ),
+                 floatingActionButton: null,
               );
             },
           ),

@@ -840,11 +840,15 @@ class InMemoryTaskRepository implements TaskRepository {
   }
 
   @override
-  Future<void> recordFocusTick(String taskId, int deltaSeconds) async {
+  Future<void> recordFocusTick(String taskId, int deltaOrTotalSeconds) async {
     final idx = _tasks.indexWhere((t) => t.id == taskId);
     if (idx != -1) {
+      final current = _tasks[idx].elapsedSeconds;
+      final newElapsed = (deltaOrTotalSeconds >= current)
+          ? deltaOrTotalSeconds
+          : (current + deltaOrTotalSeconds);
       _tasks[idx] = _tasks[idx].copyWith(
-        elapsedSeconds: _tasks[idx].elapsedSeconds + deltaSeconds,
+        elapsedSeconds: newElapsed,
         updatedAt: DateTime.now(),
       );
       _notify();

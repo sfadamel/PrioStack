@@ -67,3 +67,24 @@ Future<String?> pickTextFile() {
 void reloadPage() {
   html.window.location.reload();
 }
+
+html.BroadcastChannel? _syncChannel;
+
+/// Émet un événement de synchronisation instantané aux autres onglets du même navigateur
+void broadcastSyncEvent(String message) {
+  try {
+    _syncChannel ??= html.BroadcastChannel('priostack_tab_sync');
+    _syncChannel?.postMessage(message);
+  } catch (_) {}
+}
+
+/// Écoute les événements de synchronisation émis par d'autres onglets
+StreamSubscription? onSyncEvent(void Function() onEvent) {
+  try {
+    _syncChannel ??= html.BroadcastChannel('priostack_tab_sync');
+    return _syncChannel?.onMessage.listen((_) => onEvent());
+  } catch (_) {
+    return null;
+  }
+}
+

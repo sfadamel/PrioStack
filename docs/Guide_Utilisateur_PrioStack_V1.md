@@ -230,8 +230,92 @@ Tout en bas du Cockpit, la **Barre de Statut Analytique** synthétise la santé 
 
 ---
 
-## 10. Architecture Locale SQLite & Préparation V2 (Sync-Ready)
+## 10. Pilier 5 : Le Calendrier & Agenda Intelligent (PUSH Réunion)
 
-- **Persistance Locale Ultra-Rapide (V1)** : Sur Windows Desktop, Android et iOS, toutes vos données sont stockées localement dans une base SQLite gérée par **Drift** (`priostack_v1.sqlite`), offrant une réactivité instantanée (0 ms de latence réseau) et un fonctionnement 100 % hors-ligne.
-- **Modèle de Données « V2 Sync-Ready »** : Chaque enregistrement utilise dès la V1 un identifiant unique **UUID v4** ainsi que les champs de synchronisation distribuée (`userId`, `workspaceId`, `visibility: 'private' | 'team'`, `syncStatus: 'local' | 'synced' | 'pending'`, `createdAt`, `updatedAt`, `deletedAt`) afin de permettre le branchement transparent de **PostgreSQL / Supabase** en V2 pour le partage des files *Assistance* et *Délégué* en équipe.
-- **Journalisation Automatique** : Toutes les erreurs techniques éventuelles sont capturées automatiquement par `AppLogger` dans `logs/flutter_debug.log`.
+Le **Calendrier & Agenda** de PrioStack comble le fossé entre vos réunions programmées et votre gestion dynamique des urgences :
+
+1. **Double vue adaptative** :
+   * **Vue Mensuelle** : Grille du mois avec pastilles colorées selon la nature des réunions (*Bleu pour les points projet*, *Rose pour les urgences*, *Violet pour l'architecture*).
+   * **Vue Agenda du Jour** : Liste chronologique des créneaux de la journée avec horaires de début et fin, participants et ordre du jour.
+2. **Mécanique `🚨 Rejoindre (PUSH dans la Pile)`** :
+   À l'heure d'une réunion importante, un clic sur le bouton **Rejoindre** de la carte :
+   * Met immédiatement en pause votre tâche de fond courante.
+   * Ouvre la modale de **Note de reprise mentale** pour mémoriser l'état d'avancement de votre travail.
+   * Empile la réunion au sommet de votre Pile Active et vous redirige vers le Cockpit de travail.
+3. **Liaison instantanée avec les Notes** : Chaque événement dispose d'un bouton direct `📝 Notes` pour ouvrir immédiatement le compte-rendu associé.
+
+---
+
+## 11. Pilier 6 : Prise de Notes de Réunions avec Sauvegarde Automatique
+
+Pour éviter la dispersion dans des outils externes ou les pertes de données en cours de réunion, PrioStack intègre un **Éditeur de Notes de Réunion dédié** :
+
+1. **Sauvegarde automatique continue (Auto-Save)** :
+   Toutes les notes saisies sont sauvegardées en arrière-plan à la moindre frappe dans la base PostgreSQL Neon Cloud ainsi qu'en cache local. Même en cas de rechargement intempestif ou de coupure réseau, **aucune note n'est perdue**.
+2. **Association aux rendez-vous de l'agenda** :
+   Une note peut être créée librement ou rattachée à une réunion spécifique de votre calendrier. Le titre, la date et la liste des participants sont alors synchronisés automatiquement.
+3. **Structure adaptative** :
+   * Sur PC : Liste des comptes-rendus à gauche et éditeur plein texte à droite.
+   * Sur Mobile : Vue fluide de la liste, puis ouverture en plein écran de l'éditeur avec bouton de retour `← Liste des notes`.
+
+---
+
+## 12. Pilier 7 : Expérience Responsive & Navigation Mobile
+
+PrioStack offre une interface entièrement responsive adaptée aux smartphones et tablettes :
+
+1. **Barre de navigation inférieure à 5 onglets** :
+   * `Morning` : La check-list matinale.
+   * `Pile` : La pile d'exécution active avec son chronomètre.
+   * `Triage` : Les files Urgences, Assistance et Délégué.
+   * `Agenda` : L'agenda du jour et le calendrier mensuel.
+   * `Notes` : L'éditeur et l'historique des notes de réunion.
+2. **En-têtes et modales adaptatifs** :
+   Les barres supérieures et modales de dialogue basculent automatiquement sur des architectures fluides à plusieurs rangées sans aucun dépassement horizontal ni titre compressé.
+3. **Bannières de notifications fluides** :
+   Les alertes de réunion et de modifications d'état s'affichent sous forme de bannières compactes adaptées aux petits écrans.
+
+---
+
+## 13. Pilier 8 : Synchronisation Temps Réel Multi-Écrans
+
+PrioStack assure la cohérence parfaite de votre cockpit sur tous vos équipements :
+
+* **Inter-onglets instantané (< 10 ms)** : Si vous travaillez avec plusieurs onglets ouverts sur votre ordinateur, une tâche ajoutée ou cochée dans l'un se répercute instantanément sur les autres via l'API HTML5 `BroadcastChannel`.
+* **Multi-postes en continu (3,5 s)** : Grâce au polling intelligent avec dédoublonnage de requêtes (*in-flight coalescing*), un changement fait depuis votre smartphone est synchronisé sur votre poste fixe en moins de 4 secondes sans surcharge réseau.
+
+---
+
+## 14. Pilier 9 : Sécurité & Validation Administrateur
+
+Pour préserver la confidentialité des architectures d'entreprise et des échanges d'équipe :
+
+1. **Workflow d'approbation d'accès** :
+   Toute nouvelle création de compte via l'écran d'inscription public nécessite l'approbation explicite d'un administrateur. Tant que le compte n'est pas validé, toute tentative de connexion est bloquée avec le message explicatif approprié.
+2. **Panneau d'administration intégré** :
+   Les administrateurs disposent d'un écran dédié pour consulter la liste des inscrits, approuver de nouveaux collaborateurs ou révoquer des accès.
+3. **Sécurité cryptographique** :
+   Les mots de passe sont salés et hachés avec `bcryptjs` et les communications sont chiffrées de bout en bout via SSL / HTTPS et JWT.
+
+---
+
+## 15. Pilier 10 : Déploiement Web Apache / Plesk
+
+PrioStack peut être déployé comme sous-site ou sous-dossier sur votre hébergement web (ex. `https://www.damel-it.com/priostack/`) :
+
+1. Exécutez le script d'empaquetage automatisé :
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\package_damel_it.ps1
+   ```
+2. Récupérez l'archive produite :
+   `dist/damel-it/priostack_damel_it.zip`
+3. Téléversez et extrayez cette archive dans le répertoire `/priostack/` de votre gestionnaire de fichiers Plesk ou cPanel.
+4. Le fichier `.htaccess` pré-configuré prend en charge le routage SPA afin d'éviter toute erreur 404 lors des rechargements de page.
+
+---
+
+## 16. Architecture Technique Hybride (Neon Cloud + SQLite)
+
+- **Mode Cloud Connecté (PostgreSQL Neon.tech)** : Synchronisation distante 24/7 via l'API REST sécurisée hébergée sur Render (`https://priostack-api.onrender.com`).
+- **Persistance Locale SQLite (Windows Desktop / Hors-ligne)** : Base SQLite locale gérée par Drift (`priostack_v1.sqlite`), offrant une réactivité instantanée et un fonctionnement 100 % hors-ligne.
+- **Journalisation Automatique** : Toutes les traces techniques sont enregistrées dans `logs/flutter_debug.log`.

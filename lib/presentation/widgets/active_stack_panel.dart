@@ -24,197 +24,253 @@ Future<void> showPushInterruptionDialog(
       TextEditingController(text: existingUrgencyTitle ?? '');
   final extRefCtrl = TextEditingController();
   final formKey = GlobalKey<FormState>();
+  bool isSubmitting = false;
 
   if (!context.mounted) return;
 
   await showDialog<void>(
     context: context,
-    barrierDismissible: false,
-    builder: (ctx) => AlertDialog(
-      backgroundColor: AppTheme.surfaceCard,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide(
-          color: AppTheme.neonPink.withValues(alpha: 0.55),
-          width: 1.2,
-        ),
-      ),
-      title: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              gradient: AppTheme.urgencyGradient,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.warning_amber_rounded,
-                color: Colors.white, size: 19),
+    barrierDismissible: true,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setDialogState) => AlertDialog(
+        backgroundColor: AppTheme.surfaceCard,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(
+            color: AppTheme.neonPink.withValues(alpha: 0.55),
+            width: 1.2,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'PUSH Interruption sur la Pile',
-                  style: TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontSize: 15.5,
-                    fontWeight: FontWeight.w700,
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                gradient: AppTheme.urgencyGradient,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.warning_amber_rounded,
+                  color: Colors.white, size: 19),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'PUSH Interruption sur la Pile',
+                    style: TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-                Text(
-                  'Chronomètre Focus mis en pause automatiquement.',
-                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 11),
-                ),
-              ],
+                  Text(
+                    'Chronomètre Focus mis en pause automatiquement.',
+                    style: TextStyle(color: AppTheme.textSecondary, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        content: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 460,
+            maxHeight: MediaQuery.sizeOf(context).height * 0.75,
+          ),
+          child: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '1. Note de reprise obligatoire : où en étais-tu exactement ?',
+                    style: TextStyle(
+                      color: AppTheme.neonAmber,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    decoration: AppTheme.neumorphicInset(radius: 10),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    child: TextFormField(
+                      controller: resumeNoteCtrl,
+                      autofocus: true,
+                      maxLines: 2,
+                      style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+                      validator: (val) {
+                        if (val == null || val.trim().isEmpty) {
+                          return 'Sauvegarde ton contexte mental en 1 phrase avant de basculer !';
+                        }
+                        return null;
+                      },
+                      decoration: InputDecoration(
+                        hintText:
+                            'Ex: Je vérifiais l\'index composite sur la table sync_outbox (ligne 142)...',
+                        hintStyle:
+                            TextStyle(color: AppTheme.textMuted, fontSize: 12),
+                        border: InputBorder.none,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    '2. Urgence à empiler au sommet (ACTIVE TOP)',
+                    style: TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    decoration: AppTheme.neumorphicInset(radius: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: TextFormField(
+                      controller: urgencyTitleCtrl,
+                      enabled: existingUrgencyTaskId == null,
+                      style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+                      validator: (val) {
+                        if (existingUrgencyTaskId == null &&
+                            (val == null || val.trim().isEmpty)) {
+                          return 'Indique l\'intitulé de l\'urgence.';
+                        }
+                        return null;
+                      },
+                      decoration: InputDecoration(
+                        hintText:
+                            'Ex: Incident P1 — Timeout API Passerelle Paiement',
+                        hintStyle:
+                            TextStyle(color: AppTheme.textMuted, fontSize: 12),
+                        border: InputBorder.none,
+                      ),
+                    ),
+                  ),
+                  if (existingUrgencyTaskId == null) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      decoration: AppTheme.neumorphicInset(radius: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: TextFormField(
+                        controller: extRefCtrl,
+                        style:
+                            TextStyle(color: AppTheme.textPrimary, fontSize: 12.5),
+                        decoration: InputDecoration(
+                          hintText: 'Ticket Azure DevOps (optionnel, ex: AB#9012)',
+                          hintStyle:
+                              TextStyle(color: AppTheme.textMuted, fontSize: 12),
+                          border: InputBorder.none,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+            child: Text(
+              'Annuler',
+              style: TextStyle(color: AppTheme.textSecondary),
+            ),
+          ),
+          InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: isSubmitting
+                ? null
+                : () async {
+                    if (!formKey.currentState!.validate()) return;
+                    setDialogState(() => isSubmitting = true);
+                    try {
+                      await ref.read(taskRepositoryProvider).pushInterruption(
+                            resumeNote: resumeNoteCtrl.text,
+                            existingUrgencyTaskId: existingUrgencyTaskId,
+                            newUrgencyTitle: existingUrgencyTaskId == null
+                                ? urgencyTitleCtrl.text
+                                : null,
+                            externalRef: extRefCtrl.text,
+                          );
+                      final pushedTitle =
+                          existingUrgencyTitle ?? urgencyTitleCtrl.text.trim();
+                      ref.read(appNotificationsProvider.notifier).pushNotification(
+                            title: '🚨 Interruption empilée (PUSH) : $pushedTitle',
+                            body:
+                                'Contexte sauvegardé : "${resumeNoteCtrl.text.trim()}"',
+                            type: AppNotificationType.stackPush,
+                          );
+
+                      if (ctx.mounted) {
+                        Navigator.pop(ctx);
+                      }
+
+                      // Bascule automatique vers le Cockpit / Sanctuaire de focus
+                      ref
+                          .read(cockpitMainViewProvider.notifier)
+                          .setView(CockpitMainView.cockpit);
+
+                      // Si une tâche existante est poussée, démarrer automatiquement le chrono
+                      if (existingUrgencyTaskId != null) {
+                        ref
+                            .read(focusTimerProvider.notifier)
+                            .startTimer(existingUrgencyTaskId, initialElapsed: 0);
+                      }
+                    } catch (err) {
+                      if (ctx.mounted) {
+                        setDialogState(() => isSubmitting = false);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Erreur PUSH: $err'),
+                            backgroundColor: AppTheme.neonPink,
+                          ),
+                        );
+                      }
+                    }
+                  },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              decoration: BoxDecoration(
+                gradient: AppTheme.urgencyGradient,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isSubmitting) ...[
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  Text(
+                    isSubmitting
+                        ? 'Empilement en cours...'
+                        : 'Sauvegarder Contexte & PUSH',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
       ),
-      content: SizedBox(
-        width: 460,
-        child: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                '1. Note de reprise obligatoire : où en étais-tu exactement ?',
-                style: TextStyle(
-                  color: AppTheme.neonAmber,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Container(
-                decoration: AppTheme.neumorphicInset(radius: 10),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                child: TextFormField(
-                  controller: resumeNoteCtrl,
-                  autofocus: true,
-                  maxLines: 2,
-                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
-                  validator: (val) {
-                    if (val == null || val.trim().isEmpty) {
-                      return 'Sauvegarde ton contexte mental en 1 phrase avant de basculer !';
-                    }
-                    return null;
-                  },
-                  decoration: InputDecoration(
-                    hintText:
-                        'Ex: Je vérifiais l\'index composite sur la table sync_outbox (ligne 142)...',
-                    hintStyle:
-                        TextStyle(color: AppTheme.textMuted, fontSize: 12),
-                    border: InputBorder.none,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                '2. Urgence à empiler au sommet (ACTIVE TOP)',
-                style: TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Container(
-                decoration: AppTheme.neumorphicInset(radius: 10),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: TextFormField(
-                  controller: urgencyTitleCtrl,
-                  enabled: existingUrgencyTaskId == null,
-                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
-                  validator: (val) {
-                    if (existingUrgencyTaskId == null &&
-                        (val == null || val.trim().isEmpty)) {
-                      return 'Indique l\'intitulé de l\'urgence.';
-                    }
-                    return null;
-                  },
-                  decoration: InputDecoration(
-                    hintText:
-                        'Ex: Incident P1 — Timeout API Passerelle Paiement',
-                    hintStyle:
-                        TextStyle(color: AppTheme.textMuted, fontSize: 12),
-                    border: InputBorder.none,
-                  ),
-                ),
-              ),
-              if (existingUrgencyTaskId == null) ...[
-                const SizedBox(height: 10),
-                Container(
-                  decoration: AppTheme.neumorphicInset(radius: 10),
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: TextFormField(
-                    controller: extRefCtrl,
-                    style:
-                        TextStyle(color: AppTheme.textPrimary, fontSize: 12.5),
-                    decoration: InputDecoration(
-                      hintText: 'Ticket Azure DevOps (optionnel, ex: AB#9012)',
-                      hintStyle:
-                          TextStyle(color: AppTheme.textMuted, fontSize: 12),
-                      border: InputBorder.none,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx),
-          child: Text(
-            'Annuler',
-            style: TextStyle(color: AppTheme.textSecondary),
-          ),
-        ),
-        InkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: () async {
-            if (!formKey.currentState!.validate()) return;
-            await ref.read(taskRepositoryProvider).pushInterruption(
-                  resumeNote: resumeNoteCtrl.text,
-                  existingUrgencyTaskId: existingUrgencyTaskId,
-                  newUrgencyTitle: existingUrgencyTaskId == null
-                      ? urgencyTitleCtrl.text
-                      : null,
-                  externalRef: extRefCtrl.text,
-                );
-            final pushedTitle =
-                existingUrgencyTitle ?? urgencyTitleCtrl.text.trim();
-            ref.read(appNotificationsProvider.notifier).pushNotification(
-                  title: '🚨 Interruption empilée (PUSH) : $pushedTitle',
-                  body:
-                      'Contexte sauvegardé : "${resumeNoteCtrl.text.trim()}"',
-                  type: AppNotificationType.stackPush,
-                );
-            if (ctx.mounted) Navigator.pop(ctx);
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-            decoration: BoxDecoration(
-              gradient: AppTheme.urgencyGradient,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Text(
-              'Sauvegarder Contexte & PUSH',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 12.5,
-              ),
-            ),
-          ),
-        ),
-      ],
     ),
   );
 }
@@ -446,8 +502,9 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
     final isUrgencyTop = task.status == TaskStackStatus.activeTop.dbValue;
     final isTimerRunningOnThis =
         timerState.isRunning && timerState.activeTaskId == task.id;
-    final totalSeconds = task.elapsedSeconds +
-        (isTimerRunningOnThis ? (timerState.sessionSeconds % 5) : 0);
+    final totalSeconds = isTimerRunningOnThis
+        ? timerState.currentTotalSeconds
+        : task.elapsedSeconds;
     final accent = isUrgencyTop ? AppTheme.neonPink : AppTheme.accentBlue;
     final totalMilestonesMinutes = item.milestones.fold<int>(0, (sum, m) => sum + m.durationMinutes);
     final totalHoursStr = totalMilestonesMinutes >= 60
@@ -678,7 +735,7 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
                         borderRadius: BorderRadius.circular(7),
                         onTap: () => ref
                             .read(focusTimerProvider.notifier)
-                            .toggleTimer(task.id),
+                            .toggleTimer(task.id, initialElapsed: task.elapsedSeconds),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 10, vertical: 5),
