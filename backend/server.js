@@ -12,7 +12,10 @@ const connectionString = process.env.DATABASE_URL || "postgresql://neondb_owner:
 
 const pool = new Pool({
   connectionString,
-  ssl: { rejectUnauthorized: false }
+  ssl: { rejectUnauthorized: false },
+  max: 15,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
 });
 
 app.use(cors());
@@ -206,6 +209,26 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// Route ultra-légère pour vérifier si des données ont changé (Sync Check sans overhead)
+app.get('/api/sync/version', authMiddleware, async (req, res) => {
+  try {
+    const taskVer = await pool.query(
+      `SELECT MAX(updated_at) as v FROM tasks WHERE user_id = $1`,
+      [req.user.id]
+    );
+    const checkVer = await pool.query(
+      `SELECT MAX(updated_at) as v FROM morning_checks WHERE user_id = $1`,
+      [req.user.id]
+    );
+    res.json({
+      taskVer: taskVer.rows[0]?.v ? new Date(taskVer.rows[0].v).toISOString() : '',
+      checkVer: checkVer.rows[0]?.v ? new Date(checkVer.rows[0].v).toISOString() : '',
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Sync check failed' });
   }
 });
 

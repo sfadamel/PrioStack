@@ -21,6 +21,14 @@ class NeonCloudTaskRepository implements TaskRepository {
   DateTime? _lastTasksFetchTime;
   Future<List<TaskWithMilestones>>? _inFlightTasksFetch;
 
+  List<MorningCheckItem>? _cachedChecks;
+  DateTime? _lastChecksFetchTime;
+  Future<List<MorningCheckItem>>? _inFlightChecksFetch;
+
+  String? _lastKnownTaskVersion;
+  String? _lastKnownCheckVersion;
+  bool _isCheckingVersion = false;
+
   NeonCloudTaskRepository({
     required this.baseUrl,
     required this.getToken,
@@ -28,15 +36,51 @@ class NeonCloudTaskRepository implements TaskRepository {
     // 1. Écoute instantanée inter-onglets (BroadcastChannel Web)
     _tabSyncSub = onSyncEvent(() {
       _cachedTasks = null;
+      _cachedChecks = null;
       _notifyLocal();
     });
 
-    // 2. Polling d'arrière-plan toutes les 3.5s pour la synchronisation temps réel
-    // entre différents postes/mobiles/écrans connectés au même compte Neon
-    _pollingTimer = Timer.periodic(const Duration(milliseconds: 3500), (_) {
-      _cachedTasks = null;
-      _notifyLocal();
+    // 2. Polling intelligent optimisé toutes les 6s :
+    // Vérifie un hash de version de 40 octets au lieu de re-télécharger toute la base
+    _pollingTimer = Timer.periodic(const Duration(seconds: 6), (_) {
+      _checkRemoteVersion();
     });
+  }
+
+  Future<void> _checkRemoteVersion() async {
+    if (_isCheckingVersion) return;
+    _isCheckingVersion = true;
+    try {
+      final resp = await http
+          .get(Uri.parse('$baseUrl/sync/version'), headers: _headers)
+          .timeout(const Duration(seconds: 4));
+
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        final remoteTaskVer = data['taskVer'] as String? ?? '';
+        final remoteCheckVer = data['checkVer'] as String? ?? '';
+
+        final tasksChanged = _lastKnownTaskVersion != null && remoteTaskVer != _lastKnownTaskVersion;
+        final checksChanged = _lastKnownCheckVersion != null && remoteCheckVer != _lastKnownCheckVersion;
+
+        _lastKnownTaskVersion = remoteTaskVer;
+        _lastKnownCheckVersion = remoteCheckVer;
+
+        if (tasksChanged) {
+          _cachedTasks = null;
+        }
+        if (checksChanged) {
+          _cachedChecks = null;
+        }
+        if (tasksChanged || checksChanged) {
+          _notifyLocal();
+        }
+      }
+    } catch (_) {
+      // Ignorer silencieusement les erreurs de connexion temporaires
+    } finally {
+      _isCheckingVersion = false;
+    }
   }
 
   void dispose() {
@@ -58,6 +102,7 @@ class NeonCloudTaskRepository implements TaskRepository {
 
   void _notify() {
     _cachedTasks = null;
+    _cachedChecks = null;
     _notifyLocal();
     // Notifier immédiatement les autres onglets ouverts sur la même machine
     broadcastSyncEvent('mutation');
@@ -74,41 +119,70 @@ class NeonCloudTaskRepository implements TaskRepository {
   @override
   Stream<List<MorningCheckItem>> watchMorningChecks() {
     return _reactiveStream(() async {
+      if (_cachedChecks != null &&
+          _lastChecksFetchTime != null &&
+          DateTime.now().difference(_lastChecksFetchTime!).inSeconds < 30) {
+        return _cachedChecks!;
+      }
+      if (_inFlightChecksFetch != null) {
+        return await _inFlightChecksFetch!;
+      }
+      _inFlightChecksFetch = _rawFetchChecks();
       try {
-        final resp = await http.get(Uri.parse('$baseUrl/morning-checks'), headers: _headers);
-        if (resp.statusCode == 200) {
-          final list = jsonDecode(resp.body) as List;
-          return list.map((item) {
-            final m = item as Map<String, dynamic>;
-            return MorningCheckItem(
-              id: m['id'] as String,
-              userId: m['user_id'] as String? ?? 'usr_01',
-              workspaceId: 'wks_damelit_arch',
-              visibility: 'private',
-              syncStatus: 'synced',
-              createdAt: DateTime.tryParse(m['created_at'] as String? ?? '') ?? DateTime.now(),
-              updatedAt: DateTime.tryParse(m['updated_at'] as String? ?? '') ?? DateTime.now(),
-              title: m['title'] as String,
-              category: m['category'] as String? ?? 'Infra & Ops',
-              isChecked: m['is_checked'] as bool? ?? false,
-              sortOrder: m['sort_order'] as int? ?? 0,
-              lastResetAt: m['last_reset_at'] != null ? DateTime.tryParse(m['last_reset_at'] as String) : null,
-            );
-          }).toList();
-        }
-      } catch (_) {}
-      return <MorningCheckItem>[];
+        final res = await _inFlightChecksFetch!;
+        _cachedChecks = res;
+        _lastChecksFetchTime = DateTime.now();
+        return res;
+      } finally {
+        _inFlightChecksFetch = null;
+      }
     });
+  }
+
+  Future<List<MorningCheckItem>> _rawFetchChecks() async {
+    try {
+      final resp = await http
+          .get(Uri.parse('$baseUrl/morning-checks'), headers: _headers)
+          .timeout(const Duration(seconds: 6));
+      if (resp.statusCode == 200) {
+        final list = jsonDecode(resp.body) as List;
+        return list.map((item) {
+          final m = item as Map<String, dynamic>;
+          return MorningCheckItem(
+            id: m['id'] as String,
+            userId: m['user_id'] as String? ?? 'usr_01',
+            workspaceId: 'wks_damelit_arch',
+            visibility: 'private',
+            syncStatus: 'synced',
+            createdAt: DateTime.tryParse(m['created_at'] as String? ?? '') ?? DateTime.now(),
+            updatedAt: DateTime.tryParse(m['updated_at'] as String? ?? '') ?? DateTime.now(),
+            title: m['title'] as String,
+            category: m['category'] as String? ?? 'Infra & Ops',
+            isChecked: m['is_checked'] as bool? ?? false,
+            sortOrder: m['sort_order'] as int? ?? 0,
+            lastResetAt: m['last_reset_at'] != null ? DateTime.tryParse(m['last_reset_at'] as String) : null,
+          );
+        }).toList();
+      }
+    } catch (_) {}
+    return <MorningCheckItem>[];
   }
 
   @override
   Future<void> toggleMorningCheck(String id, bool isChecked) async {
+    if (_cachedChecks != null) {
+      final idx = _cachedChecks!.indexWhere((c) => c.id == id);
+      if (idx != -1) {
+        _cachedChecks![idx] = _cachedChecks![idx].copyWith(isChecked: isChecked);
+        _notifyLocal();
+      }
+    }
     await http.patch(
       Uri.parse('$baseUrl/morning-checks/$id/toggle'),
       headers: _headers,
       body: jsonEncode({'isChecked': isChecked}),
     );
-    _notify();
+    broadcastSyncEvent('mutation');
   }
 
   @override
@@ -464,12 +538,29 @@ class NeonCloudTaskRepository implements TaskRepository {
 
   @override
   Future<void> toggleMicroMilestone(String milestoneId, bool isDone) async {
+    // Mise à jour optimiste immédiate en mémoire
+    if (_cachedTasks != null) {
+      for (int i = 0; i < _cachedTasks!.length; i++) {
+        final taskItem = _cachedTasks![i];
+        final mIdx = taskItem.milestones.indexWhere((m) => m.id == milestoneId);
+        if (mIdx != -1) {
+          final updatedMilestones = List<MicroMilestone>.from(taskItem.milestones);
+          updatedMilestones[mIdx] = updatedMilestones[mIdx].copyWith(isDone: isDone);
+          _cachedTasks![i] = TaskWithMilestones(
+            task: taskItem.task,
+            milestones: updatedMilestones,
+          );
+          _notifyLocal();
+          break;
+        }
+      }
+    }
     await http.patch(
       Uri.parse('$baseUrl/milestones/$milestoneId'),
       headers: _headers,
       body: jsonEncode({'isDone': isDone}),
     );
-    _notify();
+    broadcastSyncEvent('mutation');
   }
 
   @override

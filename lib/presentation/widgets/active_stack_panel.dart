@@ -292,7 +292,6 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
     final stackAsync = ref.watch(activeStackProvider);
     final backlogAsync = ref.watch(backlogDeepWorkProvider);
     final completedAsync = ref.watch(completedTasksProvider);
-    final timerState = ref.watch(focusTimerProvider);
 
     final backlogList = backlogAsync.valueOrNull ?? const [];
 
@@ -338,7 +337,6 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
                       context,
                       ref,
                       topItem,
-                      timerState,
                       stackItems.length,
                     ),
 
@@ -495,16 +493,10 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
     BuildContext context,
     WidgetRef ref,
     TaskWithMilestones item,
-    FocusTimerState timerState,
     int stackDepth,
   ) {
     final task = item.task;
     final isUrgencyTop = task.status == TaskStackStatus.activeTop.dbValue;
-    final isTimerRunningOnThis =
-        timerState.isRunning && timerState.activeTaskId == task.id;
-    final totalSeconds = isTimerRunningOnThis
-        ? timerState.currentTotalSeconds
-        : task.elapsedSeconds;
     final accent = isUrgencyTop ? AppTheme.neonPink : AppTheme.accentBlue;
     final totalMilestonesMinutes = item.milestones.fold<int>(0, (sum, m) => sum + m.durationMinutes);
     final totalHoursStr = totalMilestonesMinutes >= 60
@@ -709,90 +701,108 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
                   ),
                   child: Row(
                     children: [
-                      Icon(
-                        isTimerRunningOnThis
-                            ? Icons.timer_rounded
-                            : Icons.timer_outlined,
-                        color: isTimerRunningOnThis
-                            ? AppTheme.neonGreen
-                            : AppTheme.textMuted,
-                        size: 17,
-                      ),
-                      const SizedBox(width: 7),
-                      Tooltip(
-                        message: 'Cliquer pour ajuster manuellement le temps',
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(6),
-                          onTap: () => _showEditChronoDialog(context, ref, task, totalSeconds),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  _formatDuration(totalSeconds),
-                                  style: TextStyle(
-                                    color: isTimerRunningOnThis
-                                        ? AppTheme.neonGreen
-                                        : AppTheme.textPrimary,
-                                    fontSize: 15.5,
-                                    fontWeight: FontWeight.w700,
-                                    fontFeatures: const [FontFeature.tabularFigures()],
-                                  ),
-                                ),
-                                const SizedBox(width: 5),
-                                Icon(
-                                  Icons.edit_outlined,
-                                  size: 13,
-                                  color: isTimerRunningOnThis
-                                      ? AppTheme.neonGreen.withValues(alpha: 0.7)
-                                      : AppTheme.textMuted,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      InkWell(
-                        borderRadius: BorderRadius.circular(7),
-                        onTap: () => ref
-                            .read(focusTimerProvider.notifier)
-                            .toggleTimer(task.id, initialElapsed: task.elapsedSeconds),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: isTimerRunningOnThis
-                                ? AppTheme.neonAmber.withValues(alpha: 0.15)
-                                : AppTheme.accentBlue.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(7),
-                          ),
-                          child: Row(
+                      // Isolation Consumer : Seul ce mini-widget se reconstruit chaque seconde,
+                      // épargnant ainsi 100% du reste de l'écran et des listes de cartes.
+                      Consumer(
+                        builder: (context, ref, _) {
+                          final timerState = ref.watch(focusTimerProvider);
+                          final isTimerRunningOnThis =
+                              timerState.isRunning && timerState.activeTaskId == task.id;
+                          final totalSeconds = isTimerRunningOnThis
+                              ? timerState.currentTotalSeconds
+                              : task.elapsedSeconds;
+
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
                                 isTimerRunningOnThis
-                                    ? Icons.pause_rounded
-                                    : Icons.play_arrow_rounded,
-                                size: 14,
+                                    ? Icons.timer_rounded
+                                    : Icons.timer_outlined,
                                 color: isTimerRunningOnThis
-                                    ? AppTheme.neonAmber
-                                    : AppTheme.accentBlue,
+                                    ? AppTheme.neonGreen
+                                    : AppTheme.textMuted,
+                                size: 17,
                               ),
-                              const SizedBox(width: 4),
-                              Text(
-                                isTimerRunningOnThis ? 'Pause' : 'Focus',
-                                style: TextStyle(
-                                  color: isTimerRunningOnThis
-                                      ? AppTheme.neonAmber
-                                      : AppTheme.accentBlue,
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w700,
+                              const SizedBox(width: 7),
+                              Tooltip(
+                                message: 'Cliquer pour ajuster manuellement le temps',
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(6),
+                                  onTap: () => _showEditChronoDialog(context, ref, task, totalSeconds),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          _formatDuration(totalSeconds),
+                                          style: TextStyle(
+                                            color: isTimerRunningOnThis
+                                                ? AppTheme.neonGreen
+                                                : AppTheme.textPrimary,
+                                            fontSize: 15.5,
+                                            fontWeight: FontWeight.w700,
+                                            fontFeatures: const [FontFeature.tabularFigures()],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 5),
+                                        Icon(
+                                          Icons.edit_outlined,
+                                          size: 13,
+                                          color: isTimerRunningOnThis
+                                              ? AppTheme.neonGreen.withValues(alpha: 0.7)
+                                              : AppTheme.textMuted,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              InkWell(
+                                borderRadius: BorderRadius.circular(7),
+                                onTap: () => ref
+                                    .read(focusTimerProvider.notifier)
+                                    .toggleTimer(task.id, initialElapsed: task.elapsedSeconds),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: isTimerRunningOnThis
+                                        ? AppTheme.neonAmber.withValues(alpha: 0.15)
+                                        : AppTheme.accentBlue.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(7),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        isTimerRunningOnThis
+                                            ? Icons.pause_rounded
+                                            : Icons.play_arrow_rounded,
+                                        size: 14,
+                                        color: isTimerRunningOnThis
+                                            ? AppTheme.neonAmber
+                                            : AppTheme.accentBlue,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        isTimerRunningOnThis ? 'Pause' : 'Focus',
+                                        style: TextStyle(
+                                          color: isTimerRunningOnThis
+                                              ? AppTheme.neonAmber
+                                              : AppTheme.accentBlue,
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ],
-                          ),
-                        ),
+                          );
+                        },
                       ),
                       const Spacer(),
                       if (isUrgencyTop)
