@@ -582,6 +582,19 @@ class DriftTaskRepository implements TaskRepository {
   }
 
   @override
+  Future<void> updateMorningCheckItem(String id, String title, String category) async {
+    final now = DateTime.now();
+    await (_db.update(_db.morningCheckItems)..where((t) => t.id.equals(id))).write(
+      MorningCheckItemsCompanion(
+        title: Value(title.trim()),
+        category: Value(category.trim()),
+        syncStatus: Value(SyncStatus.pending.dbValue),
+        updatedAt: Value(now),
+      ),
+    );
+  }
+
+  @override
   Future<void> deleteMorningCheckItem(String id) async {
     final now = DateTime.now();
     await (_db.update(_db.morningCheckItems)..where((t) => t.id.equals(id))).write(
@@ -599,6 +612,29 @@ class DriftTaskRepository implements TaskRepository {
     await (_db.update(_db.microMilestones)..where((m) => m.id.equals(milestoneId))).write(
       MicroMilestonesCompanion(
         deletedAt: Value(now),
+        syncStatus: Value(SyncStatus.pending.dbValue),
+        updatedAt: Value(now),
+      ),
+    );
+  }
+
+  @override
+  Future<void> updateTask(
+    String taskId, {
+    String? title,
+    String? externalRef,
+    String? requesterOrAssignee,
+    int? criticality,
+    String? type,
+  }) async {
+    final now = DateTime.now();
+    await (_db.update(_db.prioTasks)..where((t) => t.id.equals(taskId))).write(
+      PrioTasksCompanion(
+        title: title != null ? Value(title.trim()) : const Value.absent(),
+        externalRef: externalRef != null ? Value(externalRef.trim()) : const Value.absent(),
+        requesterOrAssignee: requesterOrAssignee != null ? Value(requesterOrAssignee.trim()) : const Value.absent(),
+        criticality: criticality != null ? Value(criticality) : const Value.absent(),
+        type: type != null ? Value(type) : const Value.absent(),
         syncStatus: Value(SyncStatus.pending.dbValue),
         updatedAt: Value(now),
       ),

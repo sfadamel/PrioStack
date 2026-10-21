@@ -811,11 +811,27 @@ class _MeetingNotesPanelState extends ConsumerState<MeetingNotesPanel> {
                     children: [
                       const Icon(Icons.arrow_right_rounded, size: 16, color: AppTheme.neonAmber),
                       Expanded(
-                        child: Text(
-                          action,
-                          style: TextStyle(color: AppTheme.textPrimary, fontSize: 11.5),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(4),
+                          onTap: () => _showEditActionDialog(context, idx, action),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                            child: Text(
+                              action,
+                              style: TextStyle(color: AppTheme.textPrimary, fontSize: 11.5),
+                            ),
+                          ),
                         ),
                       ),
+                      // Bouton Édition (crayon)
+                      IconButton(
+                        tooltip: "Modifier l'action",
+                        icon: const Icon(Icons.edit_outlined, size: 13, color: AppTheme.neonAmber),
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        constraints: const BoxConstraints(),
+                        onPressed: () => _showEditActionDialog(context, idx, action),
+                      ),
+                      const SizedBox(width: 4),
                       // Bouton Transformer en Tâche PrioStack
                       InkWell(
                         borderRadius: BorderRadius.circular(5),
@@ -860,6 +876,7 @@ class _MeetingNotesPanelState extends ConsumerState<MeetingNotesPanel> {
                       const SizedBox(width: 4),
                       // Supprimer l'action
                       IconButton(
+                        tooltip: "Supprimer l'action",
                         icon: Icon(Icons.close_rounded, size: 13, color: AppTheme.textMuted),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
@@ -923,6 +940,100 @@ class _MeetingNotesPanelState extends ConsumerState<MeetingNotesPanel> {
     final updated = List<String>.from(meeting.actionItems)..add(text);
     ref.read(meetingNotesProvider.notifier).updateActiveMeeting(actionItems: updated);
     _newActionCtrl.clear();
+  }
+
+  Future<void> _showEditActionDialog(
+    BuildContext context,
+    int index,
+    String currentText,
+  ) async {
+    final ctrl = TextEditingController(text: currentText);
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surfaceCard,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(color: AppTheme.borderHighlight),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.edit_note_rounded, color: AppTheme.neonAmber, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              "Modifier l'action / décision",
+              style: TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Libellé de l'action :",
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 11.5, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                maxLines: 3,
+                minLines: 1,
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: AppTheme.bgDeep,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: AppTheme.borderSubtle),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: AppTheme.neonAmber),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.neonAmber,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () {
+              final trimmed = ctrl.text.trim();
+              if (trimmed.isNotEmpty) {
+                final meeting = ref.read(meetingNotesProvider).activeMeeting;
+                if (meeting != null) {
+                  final updated = List<String>.from(meeting.actionItems);
+                  if (index >= 0 && index < updated.length) {
+                    updated[index] = trimmed;
+                    ref.read(meetingNotesProvider.notifier).updateActiveMeeting(actionItems: updated);
+                  }
+                }
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('Enregistrer', style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _applyTemplate(String tpl, MeetingNote meeting) {

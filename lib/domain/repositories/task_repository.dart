@@ -92,6 +92,9 @@ abstract class TaskRepository {
   /// Ajouter un item à la Morning Check-list
   Future<void> addMorningCheckItem(String title, String category);
 
+  /// Modifier un item de la Morning Check-list (titre, catégorie)
+  Future<void> updateMorningCheckItem(String id, String title, String category);
+
   /// Supprimer un item de la Morning Check-list (Soft-delete V2-Ready via deletedAt)
   Future<void> deleteMorningCheckItem(String id);
 
@@ -109,6 +112,16 @@ abstract class TaskRepository {
 
   /// Supprimer un micro-jalon
   Future<void> deleteMicroMilestone(String milestoneId);
+
+  /// Modifier les propriétés d'une tâche / action (titre, référence externe, demandeur, criticité, type)
+  Future<void> updateTask(
+    String taskId, {
+    String? title,
+    String? externalRef,
+    String? requesterOrAssignee,
+    int? criticality,
+    String? type,
+  });
 
   /// Supprimer une tâche (Soft-delete V2-Ready via deletedAt)
   Future<void> deleteTask(String taskId);

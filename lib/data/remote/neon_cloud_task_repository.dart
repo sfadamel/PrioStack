@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:drift/drift.dart' show Value;
 import 'package:http/http.dart' as http;
 import '../../data/local/drift/app_database.dart';
 import '../../domain/models/calendar_event.dart';
@@ -199,6 +200,26 @@ class NeonCloudTaskRepository implements TaskRepository {
       body: jsonEncode({'title': title, 'category': category}),
     );
     _notify();
+  }
+
+  @override
+  Future<void> updateMorningCheckItem(String id, String title, String category) async {
+    if (_cachedChecks != null) {
+      final idx = _cachedChecks!.indexWhere((c) => c.id == id);
+      if (idx != -1) {
+        _cachedChecks![idx] = _cachedChecks![idx].copyWith(
+          title: title.trim(),
+          category: category.trim(),
+        );
+        _notifyLocal();
+      }
+    }
+    await http.patch(
+      Uri.parse('$baseUrl/morning-checks/$id'),
+      headers: _headers,
+      body: jsonEncode({'title': title.trim(), 'category': category.trim()}),
+    );
+    broadcastSyncEvent('mutation');
   }
 
   @override
@@ -498,6 +519,50 @@ class NeonCloudTaskRepository implements TaskRepository {
       body: jsonEncode({'resumeNote': ''}),
     );
     _notify();
+  }
+
+  @override
+  Future<void> updateTask(
+    String taskId, {
+    String? title,
+    String? externalRef,
+    String? requesterOrAssignee,
+    int? criticality,
+    String? type,
+  }) async {
+    // 1. Mise à jour optimiste immédiate dans le cache mémoire
+    if (_cachedTasks != null) {
+      final idx = _cachedTasks!.indexWhere((t) => t.task.id == taskId);
+      if (idx != -1) {
+        final old = _cachedTasks![idx];
+        _cachedTasks![idx] = TaskWithMilestones(
+          task: old.task.copyWith(
+            title: title != null ? title.trim() : old.task.title,
+            externalRef: externalRef != null ? Value(externalRef.trim()) : Value(old.task.externalRef),
+            requesterOrAssignee: requesterOrAssignee != null ? Value(requesterOrAssignee.trim()) : Value(old.task.requesterOrAssignee),
+            criticality: criticality ?? old.task.criticality,
+            type: type ?? old.task.type,
+          ),
+          milestones: old.milestones,
+        );
+        _notifyLocal();
+      }
+    }
+
+    // 2. Envoi du patch au serveur backend Neon
+    final body = <String, dynamic>{};
+    if (title != null) body['title'] = title.trim();
+    if (externalRef != null) body['externalRef'] = externalRef.trim();
+    if (requesterOrAssignee != null) body['requesterOrAssignee'] = requesterOrAssignee.trim();
+    if (criticality != null) body['criticality'] = criticality;
+    if (type != null) body['type'] = type;
+
+    await http.patch(
+      Uri.parse('$baseUrl/tasks/$taskId'),
+      headers: _headers,
+      body: jsonEncode(body),
+    );
+    broadcastSyncEvent('mutation');
   }
 
   @override

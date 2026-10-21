@@ -6,6 +6,7 @@ import '../../domain/models/task_enums.dart';
 import '../../domain/repositories/task_repository.dart';
 import '../providers/notification_provider.dart';
 import '../providers/priostack_providers.dart';
+import 'edit_task_dialog.dart';
 import 'sync_reorderable_list.dart';
 
 /// Boîte de dialogue réutilisable pour déclencher un PUSH d'interruption
@@ -608,16 +609,32 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
                 ),
                 const SizedBox(height: 10),
 
-                // Titre de la tâche active (Typographie claire et aérée)
-                Text(
-                  task.title,
-                  style: TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    height: 1.3,
-                    letterSpacing: -0.2,
-                  ),
+                // Titre de la tâche active (Typographie claire et aérée) + Bouton Modifier
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        task.title,
+                        style: TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          height: 1.3,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    IconButton(
+                      tooltip: "Modifier l'action / tâche",
+                      icon: const Icon(Icons.edit_outlined, size: 16),
+                      color: AppTheme.textMuted,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                      onPressed: () => showEditTaskDialog(context, ref, task),
+                    ),
+                  ],
                 ),
 
                 // --- Note de reprise mentale (sobre citation à bordure gauche ambre) ---
@@ -1154,13 +1171,27 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
             ],
           ),
           const SizedBox(height: 6),
-          Text(
-            task.title,
-            style: TextStyle(
-              color: AppTheme.textPrimary,
-              fontSize: 13.5,
-              fontWeight: FontWeight.w600,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  task.title,
+                  style: TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: "Modifier l'action / tâche",
+                icon: const Icon(Icons.edit_outlined, size: 14),
+                color: AppTheme.textMuted,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                onPressed: () => showEditTaskDialog(context, ref, task),
+              ),
+            ],
           ),
           if (task.resumeNote != null && task.resumeNote!.isNotEmpty) ...[
             const SizedBox(height: 6),
@@ -1274,7 +1305,15 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        IconButton(
+                          tooltip: "Modifier l'action / tâche",
+                          icon: const Icon(Icons.edit_outlined, size: 13),
+                          color: AppTheme.textMuted,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                          onPressed: () => showEditTaskDialog(context, ref, item.task),
+                        ),
+                        const SizedBox(width: 4),
                         InkWell(
                           borderRadius: BorderRadius.circular(6),
                           onTap: () => ref

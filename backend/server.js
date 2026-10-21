@@ -409,20 +409,22 @@ app.post('/api/tasks/:id/pop', authMiddleware, async (req, res) => {
   }
 });
 
-// Mettre à jour une tâche
+// Mettre à jour une tâche / action
 app.patch('/api/tasks/:id', authMiddleware, async (req, res) => {
-  const { title, status, elapsedSeconds, resumeNote, requesterOrAssignee, criticality } = req.body;
+  const { title, status, elapsedSeconds, resumeNote, requesterOrAssignee, criticality, externalRef, type } = req.body;
   try {
     const fields = [];
     const values = [];
     let idx = 1;
 
-    if (title !== undefined) { fields.push(`title = $${idx++}`); values.push(title); }
+    if (title !== undefined) { fields.push(`title = $${idx++}`); values.push(title.trim()); }
     if (status !== undefined) { fields.push(`status = $${idx++}`); values.push(status); }
     if (elapsedSeconds !== undefined) { fields.push(`elapsed_seconds = $${idx++}`); values.push(elapsedSeconds); }
     if (resumeNote !== undefined) { fields.push(`resume_note = $${idx++}`); values.push(resumeNote); }
-    if (requesterOrAssignee !== undefined) { fields.push(`requester_or_assignee = $${idx++}`); values.push(requesterOrAssignee); }
+    if (requesterOrAssignee !== undefined) { fields.push(`requester_or_assignee = $${idx++}`); values.push(requesterOrAssignee.trim()); }
     if (criticality !== undefined) { fields.push(`criticality = $${idx++}`); values.push(criticality); }
+    if (externalRef !== undefined) { fields.push(`external_ref = $${idx++}`); values.push(externalRef.trim()); }
+    if (type !== undefined) { fields.push(`type = $${idx++}`); values.push(type); }
 
     if (fields.length === 0) return res.json({ message: 'Aucun changement' });
 
@@ -545,6 +547,31 @@ app.post('/api/morning-checks/reset', authMiddleware, async (req, res) => {
     res.json({ message: 'Routine réinitialisée' });
   } catch (err) {
     res.status(500).json({ error: 'Erreur reset' });
+  }
+});
+
+app.patch('/api/morning-checks/:id', authMiddleware, async (req, res) => {
+  const { title, category } = req.body;
+  try {
+    const fields = [];
+    const values = [];
+    let idx = 1;
+
+    if (title !== undefined) { fields.push(`title = $${idx++}`); values.push(title.trim()); }
+    if (category !== undefined) { fields.push(`category = $${idx++}`); values.push(category.trim()); }
+
+    if (fields.length === 0) return res.json({ message: 'Aucun changement' });
+
+    fields.push(`updated_at = NOW()`);
+    values.push(req.params.id, req.user.id);
+
+    await pool.query(
+      `UPDATE morning_checks SET ${fields.join(', ')} WHERE id = $${idx++} AND user_id = $${idx}`,
+      values
+    );
+    res.json({ message: 'Point modifié avec succès' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur modification routine' });
   }
 });
 

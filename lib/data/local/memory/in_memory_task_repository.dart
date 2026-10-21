@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:drift/drift.dart' show Value;
 import 'package:uuid/uuid.dart';
 import '../../../domain/models/calendar_event.dart';
 import '../../../domain/models/task_enums.dart';
@@ -1108,6 +1109,19 @@ class InMemoryTaskRepository implements TaskRepository {
   }
 
   @override
+  Future<void> updateMorningCheckItem(String id, String title, String category) async {
+    final idx = _morningChecks.indexWhere((c) => c.id == id);
+    if (idx != -1) {
+      _morningChecks[idx] = _morningChecks[idx].copyWith(
+        title: title.trim(),
+        category: category.trim(),
+        updatedAt: DateTime.now(),
+      );
+      _notify();
+    }
+  }
+
+  @override
   Future<void> deleteMorningCheckItem(String id) async {
     _morningChecks.removeWhere((c) => c.id == id);
     _notify();
@@ -1117,6 +1131,29 @@ class InMemoryTaskRepository implements TaskRepository {
   Future<void> deleteMicroMilestone(String milestoneId) async {
     _milestones.removeWhere((m) => m.id == milestoneId);
     _notify();
+  }
+
+  @override
+  Future<void> updateTask(
+    String taskId, {
+    String? title,
+    String? externalRef,
+    String? requesterOrAssignee,
+    int? criticality,
+    String? type,
+  }) async {
+    final idx = _tasks.indexWhere((t) => t.id == taskId);
+    if (idx != -1) {
+      _tasks[idx] = _tasks[idx].copyWith(
+        title: title != null ? title.trim() : _tasks[idx].title,
+        externalRef: externalRef != null ? Value(externalRef.trim()) : Value(_tasks[idx].externalRef),
+        requesterOrAssignee: requesterOrAssignee != null ? Value(requesterOrAssignee.trim()) : Value(_tasks[idx].requesterOrAssignee),
+        criticality: criticality ?? _tasks[idx].criticality,
+        type: type ?? _tasks[idx].type,
+        updatedAt: DateTime.now(),
+      );
+      _notify();
+    }
   }
 
   @override

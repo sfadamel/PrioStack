@@ -384,6 +384,19 @@ class _MorningChecklistPanelState extends ConsumerState<MorningChecklistPanel> {
                       const SizedBox(width: 4),
                       InkWell(
                         borderRadius: BorderRadius.circular(6),
+                        onTap: () => _showEditCheckDialog(context, ref, item),
+                        child: Padding(
+                          padding: const EdgeInsets.all(3),
+                          child: Icon(
+                            Icons.edit_outlined,
+                            size: 13.5,
+                            color: AppTheme.textMuted.withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(6),
                         onTap: () => ref
                             .read(taskRepositoryProvider)
                             .deleteMorningCheckItem(item.id as String),
@@ -583,6 +596,135 @@ class _MorningChecklistPanelState extends ConsumerState<MorningChecklistPanel> {
             child: const Text('Ajouter', style: TextStyle(color: Colors.white)),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _showEditCheckDialog(
+    BuildContext context,
+    WidgetRef ref,
+    dynamic item,
+  ) async {
+    final titleCtrl = TextEditingController(text: item.title as String);
+    String selectedCategory = item.category as String;
+    final categories = ['Infra & Ops', 'Sécurité & Cloud', 'Architecture & Code', 'Général'];
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          backgroundColor: AppTheme.surfaceCard,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: AppTheme.borderHighlight),
+          ),
+          title: Row(
+            children: [
+              const Icon(Icons.edit_note_rounded, color: AppTheme.accentBlue, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                "Modifier le point de routine",
+                style: TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Libellé du point de contrôle *",
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 11.5, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: titleCtrl,
+                  autofocus: true,
+                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: AppTheme.bgDeep,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: AppTheme.borderSubtle),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppTheme.accentBlue),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  "Catégorie",
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 11.5, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: categories.map((cat) {
+                    final isSel = selectedCategory == cat;
+                    return InkWell(
+                      borderRadius: BorderRadius.circular(6),
+                      onTap: () => setState(() => selectedCategory = cat),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isSel ? AppTheme.accentBlue : AppTheme.surfaceElevated,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: isSel ? AppTheme.accentBlue : AppTheme.borderSubtle,
+                          ),
+                        ),
+                        child: Text(
+                          cat,
+                          style: TextStyle(
+                            color: isSel ? Colors.white : AppTheme.textSecondary,
+                            fontSize: 11,
+                            fontWeight: isSel ? FontWeight.w700 : FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Annuler"),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.accentBlue,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () async {
+                final trimmed = titleCtrl.text.trim();
+                if (trimmed.isNotEmpty) {
+                  await ref.read(taskRepositoryProvider).updateMorningCheckItem(
+                        item.id as String,
+                        trimmed,
+                        selectedCategory,
+                      );
+                }
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: const Text("Enregistrer", style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
       ),
     );
   }

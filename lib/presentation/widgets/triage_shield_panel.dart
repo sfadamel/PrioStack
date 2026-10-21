@@ -6,6 +6,7 @@ import '../../domain/repositories/task_repository.dart';
 import '../providers/notification_provider.dart';
 import '../providers/priostack_providers.dart';
 import 'active_stack_panel.dart';
+import 'edit_task_dialog.dart';
 import 'sync_reorderable_list.dart';
 
 /// Zone 3 (Droite sur PC) : "Triage & Bouclier" épuré (4 Onglets segmentés)
@@ -282,6 +283,32 @@ class _TriageShieldPanelState extends ConsumerState<TriageShieldPanel> {
               const Spacer(),
               InkWell(
                 borderRadius: BorderRadius.circular(5),
+                onTap: () => showEditTaskDialog(context, ref, task),
+                child: Padding(
+                  padding: const EdgeInsets.all(2),
+                  child: Icon(
+                    Icons.edit_outlined,
+                    size: 13.5,
+                    color: AppTheme.textMuted.withValues(alpha: 0.7),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              InkWell(
+                borderRadius: BorderRadius.circular(5),
+                onTap: () => showEditTaskDialog(context, ref, task),
+                child: Padding(
+                  padding: const EdgeInsets.all(2),
+                  child: Icon(
+                    Icons.edit_outlined,
+                    size: 13.5,
+                    color: AppTheme.textMuted.withValues(alpha: 0.7),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              InkWell(
+                borderRadius: BorderRadius.circular(5),
                 onTap: () =>
                     ref.read(taskRepositoryProvider).deleteTask(task.id),
                 child: Padding(
@@ -417,6 +444,19 @@ class _TriageShieldPanelState extends ConsumerState<TriageShieldPanel> {
                     ),
                   ),
                 ),
+              const SizedBox(width: 4),
+              InkWell(
+                borderRadius: BorderRadius.circular(5),
+                onTap: () => showEditTaskDialog(context, ref, task),
+                child: Padding(
+                  padding: const EdgeInsets.all(2),
+                  child: Icon(
+                    Icons.edit_outlined,
+                    size: 13.5,
+                    color: AppTheme.textMuted.withValues(alpha: 0.7),
+                  ),
+                ),
+              ),
               const SizedBox(width: 4),
               InkWell(
                 borderRadius: BorderRadius.circular(5),
