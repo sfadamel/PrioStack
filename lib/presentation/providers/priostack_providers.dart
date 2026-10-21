@@ -159,6 +159,7 @@ class FocusTimerState {
 /// Notifier Riverpod 2 gérant le Chronomètre Focus et sa mise en pause automatique lors d'un PUSH
 class FocusTimerNotifier extends Notifier<FocusTimerState> {
   Timer? _ticker;
+  DateTime? _sessionStartTime;
   int _ticksSinceLastSave = 0;
 
   @override
@@ -183,6 +184,8 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
         ? state.currentTotalSeconds
         : initialElapsed;
 
+    _sessionStartTime = DateTime.now();
+
     state = FocusTimerState(
       isRunning: true,
       activeTaskId: taskId,
@@ -192,7 +195,10 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
     _ticksSinceLastSave = 0;
 
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-      state = state.copyWith(sessionSeconds: state.sessionSeconds + 1);
+      if (_sessionStartTime != null) {
+        final elapsed = DateTime.now().difference(_sessionStartTime!).inSeconds;
+        state = state.copyWith(sessionSeconds: elapsed);
+      }
       _ticksSinceLastSave++;
       // Sauvegarde périodique toutes les 10 secondes pour sécuriser en cas de fermeture
       if (_ticksSinceLastSave >= 10 && state.activeTaskId != null) {
@@ -206,16 +212,52 @@ class FocusTimerNotifier extends Notifier<FocusTimerState> {
   Future<void> pauseTimer() async {
     _ticker?.cancel();
     if (state.activeTaskId != null) {
-      final currentTotal = state.currentTotalSeconds;
-      await ref.read(taskRepositoryProvider).recordFocusTick(state.activeTaskId!, currentTotal);
+      int finalSession = state.sessionSeconds;
+      if (_sessionStartTime != null) {
+        finalSession = DateTime.now().difference(_sessionStartTime!).inSeconds;
+      }
+      _sessionStartTime = null;
+      final currentTotal = state.initialElapsedSeconds + finalSession;
+      await ref.read(taskRepositoryProvider).recordFocusTick(state.activeTaskId!, currentTotal, notify: true);
       state = state.copyWith(
         isRunning: false,
         initialElapsedSeconds: currentTotal,
         sessionSeconds: 0,
       );
     } else {
+      _sessionStartTime = null;
       state = state.copyWith(isRunning: false);
     }
+  }
+
+  /// Permet d'ajuster manuellement le temps total investi sur une tâche
+  Future<void> setManualElapsedSeconds(String taskId, int totalSeconds) async {
+    final wasRunning = state.isRunning && state.activeTaskId == taskId;
+    if (wasRunning) {
+      _ticker?.cancel();
+    }
+    _sessionStartTime = DateTime.now();
+    state = FocusTimerState(
+      isRunning: wasRunning,
+      activeTaskId: taskId,
+      initialElapsedSeconds: totalSeconds,
+      sessionSeconds: 0,
+    );
+    if (wasRunning) {
+      _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (_sessionStartTime != null) {
+          final elapsed = DateTime.now().difference(_sessionStartTime!).inSeconds;
+          state = state.copyWith(sessionSeconds: elapsed);
+        }
+        _ticksSinceLastSave++;
+        if (_ticksSinceLastSave >= 10 && state.activeTaskId != null) {
+          final currentTotal = state.currentTotalSeconds;
+          _ticksSinceLastSave = 0;
+          ref.read(taskRepositoryProvider).recordFocusTick(state.activeTaskId!, currentTotal);
+        }
+      });
+    }
+    await ref.read(taskRepositoryProvider).recordFocusTick(taskId, totalSeconds, notify: true);
   }
 }
 

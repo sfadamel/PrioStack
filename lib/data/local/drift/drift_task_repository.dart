@@ -339,17 +339,13 @@ class DriftTaskRepository implements TaskRepository {
   }
 
   @override
-  Future<void> recordFocusTick(String taskId, int deltaOrTotalSeconds) async {
+  Future<void> recordFocusTick(String taskId, int totalElapsedSeconds, {bool notify = false}) async {
     final task = await (_db.select(_db.prioTasks)..where((t) => t.id.equals(taskId))).getSingleOrNull();
     if (task == null) return;
 
-    final newElapsed = (deltaOrTotalSeconds >= task.elapsedSeconds)
-        ? deltaOrTotalSeconds
-        : (task.elapsedSeconds + deltaOrTotalSeconds);
-
     await (_db.update(_db.prioTasks)..where((t) => t.id.equals(taskId))).write(
       PrioTasksCompanion(
-        elapsedSeconds: Value(newElapsed),
+        elapsedSeconds: Value(totalElapsedSeconds),
         updatedAt: Value(DateTime.now()),
       ),
     );

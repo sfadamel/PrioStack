@@ -719,15 +719,38 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
                         size: 17,
                       ),
                       const SizedBox(width: 7),
-                      Text(
-                        _formatDuration(totalSeconds),
-                        style: TextStyle(
-                          color: isTimerRunningOnThis
-                              ? AppTheme.neonGreen
-                              : AppTheme.textPrimary,
-                          fontSize: 15.5,
-                          fontWeight: FontWeight.w700,
-                          fontFeatures: const [FontFeature.tabularFigures()],
+                      Tooltip(
+                        message: 'Cliquer pour ajuster manuellement le temps',
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(6),
+                          onTap: () => _showEditChronoDialog(context, ref, task, totalSeconds),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _formatDuration(totalSeconds),
+                                  style: TextStyle(
+                                    color: isTimerRunningOnThis
+                                        ? AppTheme.neonGreen
+                                        : AppTheme.textPrimary,
+                                    fontSize: 15.5,
+                                    fontWeight: FontWeight.w700,
+                                    fontFeatures: const [FontFeature.tabularFigures()],
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                Icon(
+                                  Icons.edit_outlined,
+                                  size: 13,
+                                  color: isTimerRunningOnThis
+                                      ? AppTheme.neonGreen.withValues(alpha: 0.7)
+                                      : AppTheme.textMuted,
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -1411,7 +1434,7 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
     final titleCtrl = TextEditingController(text: initialTitle);
     final durationCtrl = TextEditingController(text: initialDuration.toString());
     int selectedDuration = initialDuration;
-    final presets = [15, 30, 45, 60, 90, 120];
+    final presets = [15, 30, 45, 60, 90, 120, 180, 240];
 
     await showDialog<void>(
       context: context,
@@ -1494,6 +1517,9 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
                     runSpacing: 6,
                     children: presets.map((p) {
                       final isSelected = selectedDuration == p;
+                      final label = p < 60
+                          ? '${p}m'
+                          : (p % 60 == 0 ? '${p ~/ 60}h' : '${p ~/ 60}h${p % 60}');
                       return InkWell(
                         borderRadius: BorderRadius.circular(8),
                         onTap: () {
@@ -1513,7 +1539,7 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
                             ),
                           ),
                           child: Text(
-                            '${p}m',
+                            label,
                             style: TextStyle(
                               color: isSelected ? Colors.white : AppTheme.textSecondary,
                               fontSize: 11.5,
@@ -1533,13 +1559,15 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
                       ),
                       const SizedBox(width: 8),
                       SizedBox(
-                        width: 76,
+                        width: 96,
                         height: 32,
                         child: TextField(
                           controller: durationCtrl,
-                          keyboardType: TextInputType.number,
+                          keyboardType: TextInputType.text,
                           style: TextStyle(color: AppTheme.textPrimary, fontSize: 12),
                           decoration: InputDecoration(
+                            hintText: 'ex: 1h30',
+                            hintStyle: TextStyle(color: AppTheme.textMuted, fontSize: 10),
                             suffixText: 'min',
                             suffixStyle: TextStyle(color: AppTheme.textMuted, fontSize: 10),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -1555,7 +1583,7 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
                             ),
                           ),
                           onChanged: (val) {
-                            final parsed = int.tryParse(val);
+                            final parsed = _parseDurationInput(val);
                             if (parsed != null && parsed > 0) {
                               setState(() {
                                 selectedDuration = parsed;
@@ -1596,12 +1624,285 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
     );
   }
 
+  /// Boîte de dialogue permettant à l'utilisateur d'ajuster manuellement le chronomètre
+  Future<void> _showEditChronoDialog(
+    BuildContext context,
+    WidgetRef ref,
+    PrioTask task,
+    int currentSeconds,
+  ) async {
+    final currentHours = currentSeconds ~/ 3600;
+    final currentMinutes = (currentSeconds % 3600) ~/ 60;
+    final hoursCtrl = TextEditingController(text: currentHours.toString());
+    final minutesCtrl = TextEditingController(text: currentMinutes.toString());
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) {
+          final h = int.tryParse(hoursCtrl.text) ?? 0;
+          final m = int.tryParse(minutesCtrl.text) ?? 0;
+          final previewTotal = (h * 3600) + (m * 60);
+
+          void updateValues(int newHours, int newMinutes) {
+            setState(() {
+              hoursCtrl.text = newHours.toString();
+              minutesCtrl.text = newMinutes.toString();
+            });
+          }
+
+          return AlertDialog(
+            backgroundColor: AppTheme.surfaceCard,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: AppTheme.borderHighlight),
+            ),
+            title: Row(
+              children: [
+                const Icon(Icons.timer_outlined, color: AppTheme.accentBlue, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Ajuster le chronomètre',
+                    style: TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            content: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    task.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppTheme.textMuted,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      // Champ Heures
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Heures',
+                              style: TextStyle(
+                                color: AppTheme.textSecondary,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: hoursCtrl,
+                              keyboardType: TextInputType.number,
+                              style: TextStyle(
+                                color: AppTheme.textPrimary,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              decoration: InputDecoration(
+                                suffixText: 'h',
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                filled: true,
+                                fillColor: AppTheme.bgDeep,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: AppTheme.borderSubtle),
+                                ),
+                              ),
+                              onChanged: (_) => setState(() {}),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      // Champ Minutes
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Minutes',
+                              style: TextStyle(
+                                color: AppTheme.textSecondary,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: minutesCtrl,
+                              keyboardType: TextInputType.number,
+                              style: TextStyle(
+                                color: AppTheme.textPrimary,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              decoration: InputDecoration(
+                                suffixText: 'min',
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                filled: true,
+                                fillColor: AppTheme.bgDeep,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: AppTheme.borderSubtle),
+                                ),
+                              ),
+                              onChanged: (_) => setState(() {}),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  // Raccourcis rapides
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      _buildQuickAdjustChip('+15m', () {
+                        final curH = int.tryParse(hoursCtrl.text) ?? 0;
+                        final curM = int.tryParse(minutesCtrl.text) ?? 0;
+                        final totalM = (curH * 60) + curM + 15;
+                        updateValues(totalM ~/ 60, totalM % 60);
+                      }),
+                      _buildQuickAdjustChip('+30m', () {
+                        final curH = int.tryParse(hoursCtrl.text) ?? 0;
+                        final curM = int.tryParse(minutesCtrl.text) ?? 0;
+                        final totalM = (curH * 60) + curM + 30;
+                        updateValues(totalM ~/ 60, totalM % 60);
+                      }),
+                      _buildQuickAdjustChip('+1h', () {
+                        final curH = int.tryParse(hoursCtrl.text) ?? 0;
+                        final curM = int.tryParse(minutesCtrl.text) ?? 0;
+                        updateValues(curH + 1, curM);
+                      }),
+                      _buildQuickAdjustChip('+2h', () {
+                        final curH = int.tryParse(hoursCtrl.text) ?? 0;
+                        final curM = int.tryParse(minutesCtrl.text) ?? 0;
+                        updateValues(curH + 2, curM);
+                      }),
+                      _buildQuickAdjustChip('Reset (0s)', () {
+                        updateValues(0, 0);
+                      }),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppTheme.bgDeep,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppTheme.borderSubtle),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Nouveau temps total :',
+                          style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                        ),
+                        Text(
+                          _formatDuration(previewTotal),
+                          style: const TextStyle(
+                            color: AppTheme.neonGreen,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Annuler'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.accentBlue,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () async {
+                  final h = int.tryParse(hoursCtrl.text) ?? 0;
+                  final m = int.tryParse(minutesCtrl.text) ?? 0;
+                  final totalSecs = (h * 3600) + (m * 60);
+                  await ref.read(focusTimerProvider.notifier).setManualElapsedSeconds(task.id, totalSecs);
+                  if (ctx.mounted) Navigator.pop(ctx);
+                },
+                child: const Text('Enregistrer', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildQuickAdjustChip(String label, VoidCallback onTap) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(6),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceElevated,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: AppTheme.borderSubtle),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: AppTheme.textSecondary,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  int? _parseDurationInput(String input) {
+    final trimmed = input.trim().toLowerCase();
+    if (trimmed.isEmpty) return null;
+    if (trimmed.contains('h')) {
+      final parts = trimmed.split('h');
+      final hours = double.tryParse(parts[0].trim().replaceAll(',', '.'));
+      if (hours != null) {
+        int extraMinutes = 0;
+        if (parts.length > 1 && parts[1].trim().isNotEmpty) {
+          extraMinutes = int.tryParse(parts[1].trim().replaceAll('min', '').replaceAll('m', '')) ?? 0;
+        }
+        return (hours * 60).round() + extraMinutes;
+      }
+    }
+    return int.tryParse(trimmed.replaceAll('min', '').replaceAll('m', ''));
+  }
+
   String _formatDuration(int totalSeconds) {
     final hours = totalSeconds ~/ 3600;
     final minutes = (totalSeconds % 3600) ~/ 60;
     final seconds = totalSeconds % 60;
     if (hours > 0) {
-      return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+      return '${hours}h ${minutes.toString().padLeft(2, '0')}m ${seconds.toString().padLeft(2, '0')}s';
     }
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }

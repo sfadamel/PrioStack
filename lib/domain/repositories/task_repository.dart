@@ -113,8 +113,8 @@ abstract class TaskRepository {
   /// Supprimer une tâche (Soft-delete V2-Ready via deletedAt)
   Future<void> deleteTask(String taskId);
 
-  /// Incrémenter le temps passé sur la tâche active (Chronomètre Focus)
-  Future<void> recordFocusTick(String taskId, int deltaSeconds);
+  /// Incrémenter ou définir le temps passé sur la tâche active (Chronomètre Focus)
+  Future<void> recordFocusTick(String taskId, int totalElapsedSeconds, {bool notify = false});
 
   /// 🚨 MÉCANIQUE PUSH :
   /// 1. Sauvegarde la "Note de reprise" obligatoire sur la tâche interrompue

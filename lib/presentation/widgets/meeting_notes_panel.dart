@@ -674,7 +674,7 @@ class _MeetingNotesPanelState extends ConsumerState<MeetingNotesPanel> {
           // Ligne Métadonnées (Date + Participants)
           Row(
             children: [
-              Icon(Icons.calendar_today_rounded, size: 14, color: AppTheme.accentBlue),
+              const Icon(Icons.calendar_today_rounded, size: 14, color: AppTheme.accentBlue),
               const SizedBox(width: 6),
               Text(
                 '${meeting.meetingDate.day}/${meeting.meetingDate.month}/${meeting.meetingDate.year}',
@@ -825,10 +825,10 @@ class _MeetingNotesPanelState extends ConsumerState<MeetingNotesPanel> {
                               .convertActionItemToTask(action);
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
+                              const SnackBar(
                                 content: Text('Action convertie en tâche active dans PrioStack !'),
                                 backgroundColor: AppTheme.neonGreen,
-                                duration: const Duration(seconds: 2),
+                                duration: Duration(seconds: 2),
                               ),
                             );
                           }
@@ -839,12 +839,12 @@ class _MeetingNotesPanelState extends ConsumerState<MeetingNotesPanel> {
                             color: AppTheme.accentBlue.withValues(alpha: 0.16),
                             borderRadius: BorderRadius.circular(4),
                           ),
-                          child: Row(
+                          child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.add_task_rounded,
+                              Icon(Icons.add_task_rounded,
                                   size: 11, color: AppTheme.accentBlue),
-                              const SizedBox(width: 4),
+                              SizedBox(width: 4),
                               Text(
                                 '+ Tâche Pile Active',
                                 style: TextStyle(

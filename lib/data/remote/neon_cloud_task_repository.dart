@@ -393,18 +393,14 @@ class NeonCloudTaskRepository implements TaskRepository {
   }
 
   @override
-  Future<void> recordFocusTick(String taskId, int deltaOrTotalSeconds) async {
+  Future<void> recordFocusTick(String taskId, int totalElapsedSeconds, {bool notify = false}) async {
     try {
-      int newElapsed = deltaOrTotalSeconds;
       if (_cachedTasks != null) {
         final idx = _cachedTasks!.indexWhere((t) => t.task.id == taskId);
         if (idx != -1) {
           final old = _cachedTasks![idx];
-          newElapsed = (deltaOrTotalSeconds >= old.task.elapsedSeconds)
-              ? deltaOrTotalSeconds
-              : (old.task.elapsedSeconds + deltaOrTotalSeconds);
           _cachedTasks![idx] = TaskWithMilestones(
-            task: old.task.copyWith(elapsedSeconds: newElapsed),
+            task: old.task.copyWith(elapsedSeconds: totalElapsedSeconds),
             milestones: old.milestones,
           );
         }
@@ -412,8 +408,11 @@ class NeonCloudTaskRepository implements TaskRepository {
       await http.patch(
         Uri.parse('$baseUrl/tasks/$taskId'),
         headers: _headers,
-        body: jsonEncode({'elapsedSeconds': newElapsed}),
+        body: jsonEncode({'elapsedSeconds': totalElapsedSeconds}),
       ).timeout(const Duration(seconds: 5));
+      if (notify) {
+        _notify();
+      }
     } catch (_) {}
   }
 
