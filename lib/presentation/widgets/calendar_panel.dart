@@ -1686,7 +1686,7 @@ class _CalendarScreenPanelState extends ConsumerState<CalendarScreenPanel> {
               ),
               const SizedBox(height: 14),
               const Text(
-                'Note de reprise obligatoire : où en étais-tu exactement avant la réunion ?',
+                'Note de reprise mentale (optionnelle) : où en étais-tu avant la réunion ?',
                 style: TextStyle(
                   color: AppTheme.neonAmber,
                   fontSize: 12.5,
@@ -1701,7 +1701,7 @@ class _CalendarScreenPanelState extends ConsumerState<CalendarScreenPanel> {
                 style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
                 decoration: const InputDecoration(
                   hintText:
-                      'Ex: J\'étais à la moitié de la spécification RPC V2, reprendre le test unitaire après la réunion.',
+                      'Optionnel : spécifie où tu t\'es arrêté pour reprendre après la réunion...',
                 ),
               ),
             ],

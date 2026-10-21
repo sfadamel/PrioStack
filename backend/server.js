@@ -323,12 +323,13 @@ app.post('/api/tasks/push-interruption', authMiddleware, async (req, res) => {
       [req.user.id]
     );
 
-    // Enregistrer la note de reprise sur la tâche de fond de base
-    if (resumeNote) {
+    // Enregistrer la note de reprise sur la tâche de fond de base (si fournie)
+    const trimmedResume = typeof resumeNote === 'string' ? resumeNote.trim() : '';
+    if (trimmedResume.length > 0) {
       await client.query(
         `UPDATE tasks SET resume_note = $1, updated_at = NOW()
          WHERE user_id = $2 AND status = 'pushed_pause' AND type = 'deep_work'`,
-        [resumeNote, req.user.id]
+        [trimmedResume, req.user.id]
       );
     }
 

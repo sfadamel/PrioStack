@@ -881,6 +881,7 @@ class InMemoryTaskRepository implements TaskRepository {
 
     if (stackTasks.isNotEmpty) {
       final topId = stackTasks.first.id;
+      final trimmedResume = resumeNote.trim();
       for (int i = 0; i < _tasks.length; i++) {
         if (_tasks[i].id == topId) {
           _tasks[i] = PrioTask(
@@ -898,7 +899,7 @@ class InMemoryTaskRepository implements TaskRepository {
             criticality: _tasks[i].criticality,
             externalRef: _tasks[i].externalRef,
             requesterOrAssignee: _tasks[i].requesterOrAssignee,
-            resumeNote: resumeNote.trim(),
+            resumeNote: trimmedResume.isEmpty ? null : trimmedResume,
             stackOrder: _tasks[i].stackOrder,
             elapsedSeconds: _tasks[i].elapsedSeconds,
             interruptionCount: _tasks[i].interruptionCount + 1,

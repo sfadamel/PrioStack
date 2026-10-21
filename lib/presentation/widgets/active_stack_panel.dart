@@ -88,7 +88,7 @@ Future<void> showPushInterruptionDialog(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    '1. Note de reprise obligatoire : où en étais-tu exactement ?',
+                    '1. Note de reprise mentale (optionnelle) : où en étais-tu ?',
                     style: TextStyle(
                       color: AppTheme.neonAmber,
                       fontWeight: FontWeight.w700,
@@ -105,15 +105,9 @@ Future<void> showPushInterruptionDialog(
                       autofocus: true,
                       maxLines: 2,
                       style: TextStyle(color: AppTheme.textPrimary, fontSize: 13),
-                      validator: (val) {
-                        if (val == null || val.trim().isEmpty) {
-                          return 'Sauvegarde ton contexte mental en 1 phrase avant de basculer !';
-                        }
-                        return null;
-                      },
                       decoration: InputDecoration(
                         hintText:
-                            'Ex: Je vérifiais l\'index composite sur la table sync_outbox (ligne 142)...',
+                            'Optionnel : sauvegarde en 1 phrase ton point d\'arrêt pour reprendre sans effort...',
                         hintStyle:
                             TextStyle(color: AppTheme.textMuted, fontSize: 12),
                         border: InputBorder.none,
@@ -202,10 +196,12 @@ Future<void> showPushInterruptionDialog(
                           );
                       final pushedTitle =
                           existingUrgencyTitle ?? urgencyTitleCtrl.text.trim();
+                      final noteTrimmed = resumeNoteCtrl.text.trim();
                       ref.read(appNotificationsProvider.notifier).pushNotification(
                             title: '🚨 Interruption empilée (PUSH) : $pushedTitle',
-                            body:
-                                'Contexte sauvegardé : "${resumeNoteCtrl.text.trim()}"',
+                            body: noteTrimmed.isNotEmpty
+                                ? 'Contexte sauvegardé : "$noteTrimmed"'
+                                : 'Tâche précédente mise en pause dans la pile.',
                             type: AppNotificationType.stackPush,
                           );
 

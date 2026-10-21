@@ -381,14 +381,15 @@ class DriftTaskRepository implements TaskRepository {
         if (t.stackOrder > maxOrder) maxOrder = t.stackOrder;
       }
 
-      // 2. Sauvegarder la "Note de reprise" obligatoire sur la tâche qui était au premier plan
+      // 2. Sauvegarder la "Note de reprise" (optionnelle) sur la tâche qui était au premier plan
       //    et basculer tous les éléments de la pile en 'pushed_pause'
       if (stackTasks.isNotEmpty) {
         final currentTop = stackTasks.first;
+        final trimmed = resumeNote.trim();
         await (_db.update(_db.prioTasks)..where((t) => t.id.equals(currentTop.id))).write(
           PrioTasksCompanion(
             status: Value(TaskStackStatus.pushedPause.dbValue),
-            resumeNote: Value(resumeNote.trim()),
+            resumeNote: Value(trimmed.isEmpty ? null : trimmed),
             interruptionCount: Value(currentTop.interruptionCount + 1),
             syncStatus: Value(SyncStatus.pending.dbValue),
             updatedAt: Value(now),

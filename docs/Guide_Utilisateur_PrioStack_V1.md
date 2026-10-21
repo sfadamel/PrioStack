@@ -128,10 +128,10 @@ La colonne centrale constitue le **cœur opérationnel de PrioStack**. Une ligne
 Lorsqu'une urgence survient et que vous devez interrompre immédiatement votre Tâche de Fond :
 1. Cliquez sur le bouton rose **`🚨 Interruption (PUSH)`** en haut à droite de la Pile Active (ou sur le bouton **`🚨 Prendre (PUSH)`** d'une carte de l'onglet *Urgences*).
 2. **Pause automatique** : PrioStack met instantanément en pause votre chronomètre Focus.
-3. **Saisie obligatoire de la Note de reprise mentale** : Une boîte de dialogue s'ouvre et vous demande :
-   > *« 1. Note de reprise obligatoire : où en étais-tu exactement ? »*
+3. **Saisie de la Note de reprise mentale (optionnelle et non bloquante)** : Une boîte de dialogue s'ouvre et vous propose :
+   > *« 1. Note de reprise mentale (optionnelle) : où en étais-tu ? »*
 
-![Boîte de dialogue PUSH Interruption avec Note de reprise obligatoire](screenshots/07_push_interruption_dialog.png)
+![Boîte de dialogue PUSH Interruption avec Note de reprise](screenshots/07_push_interruption_dialog.png)
 
 4. Cliquez sur **`Sauvegarder Contexte & PUSH`**.
 5. **État de la Pile après le PUSH (`STACK DEPTH : 2`)** :
