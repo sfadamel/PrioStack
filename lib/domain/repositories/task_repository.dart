@@ -203,8 +203,12 @@ abstract class TaskRepository {
     int recurrenceCount = 1,
   });
 
-  /// Mettre à jour un événement du calendrier
-  Future<void> updateCalendarEvent(CalendarEventItem event);
+  /// Mettre à jour un événement du calendrier (avec option de périodicité/récurrence)
+  Future<void> updateCalendarEvent(
+    CalendarEventItem event, {
+    EventRecurrence recurrence = EventRecurrence.none,
+    int recurrenceCount = 1,
+  });
 
   /// Basculer l'état terminé / honoré d'un événement du calendrier
   Future<void> toggleCalendarEventCompleted(String eventId, bool isCompleted);

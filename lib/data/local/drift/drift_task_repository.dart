@@ -1064,14 +1064,64 @@ class DriftTaskRepository implements TaskRepository {
   }
 
   @override
-  Future<void> updateCalendarEvent(CalendarEventItem event) async {
+  Future<void> updateCalendarEvent(
+    CalendarEventItem event, {
+    EventRecurrence recurrence = EventRecurrence.none,
+    int recurrenceCount = 1,
+  }) async {
     await _ensureCalendarTableAndSeed();
     final now = DateTime.now();
+    String? rule = recurrence != EventRecurrence.none ? recurrence.name : event.recurrenceRule;
+    String? groupId = event.recurrenceGroupId;
+
+    if (!event.isRecurring && recurrence != EventRecurrence.none && recurrenceCount > 1) {
+      groupId = const Uuid().v4();
+      rule = recurrence.name;
+      final occurrences = recurrence.generateOccurrences(
+        startTime: event.startTime,
+        endTime: event.endTime,
+        count: recurrenceCount,
+      );
+      // Insérer les occurrences supplémentaires 1..N-1
+      for (int i = 1; i < occurrences.length; i++) {
+        final occ = occurrences[i];
+        final occId = const Uuid().v4();
+        await _db.customStatement(
+          '''
+          INSERT INTO calendar_events
+          (id, workspace_id, title, category, start_time, end_time,
+           participants_or_location, external_ref, notes, recurrence_rule, recurrence_group_id,
+           is_completed, created_at, updated_at, sync_status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 'pending')
+          ''',
+          [
+            occId,
+            kDefaultWorkspaceId,
+            event.title.trim(),
+            event.category.dbValue,
+            occ.start.millisecondsSinceEpoch,
+            occ.end.millisecondsSinceEpoch,
+            event.participantsOrLocation,
+            event.externalRef,
+            event.notes,
+            rule,
+            groupId,
+            now.millisecondsSinceEpoch,
+            now.millisecondsSinceEpoch,
+          ],
+        );
+      }
+    } else if (event.isRecurring && recurrence == EventRecurrence.none) {
+      rule = null;
+      groupId = null;
+    }
+
     await _db.customStatement(
       '''
       UPDATE calendar_events
       SET title = ?, category = ?, start_time = ?, end_time = ?,
           participants_or_location = ?, external_ref = ?, notes = ?,
+          recurrence_rule = ?, recurrence_group_id = ?,
           is_completed = ?, updated_at = ?, sync_status = 'pending'
       WHERE id = ?
       ''',
@@ -1083,6 +1133,8 @@ class DriftTaskRepository implements TaskRepository {
         event.participantsOrLocation,
         event.externalRef,
         event.notes,
+        rule,
+        groupId,
         event.isCompleted ? 1 : 0,
         now.millisecondsSinceEpoch,
         event.id,

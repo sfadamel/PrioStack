@@ -70,10 +70,12 @@ enum EventRecurrence {
   static EventRecurrence fromDb(String? value) {
     if (value == null) return EventRecurrence.none;
     return EventRecurrence.values.firstWhere(
-      (e) => e.dbValue == value,
+      (e) => e.dbValue == value || e.name == value,
       orElse: () => EventRecurrence.none,
     );
   }
+
+  static EventRecurrence fromString(String? value) => fromDb(value);
 
   /// Génère la liste des plages [start, end] pour le nombre d'occurrences demandé
   List<({DateTime start, DateTime end})> generateOccurrences({

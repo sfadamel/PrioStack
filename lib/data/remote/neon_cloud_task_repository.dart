@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:drift/drift.dart' show Value;
 import 'package:http/http.dart' as http;
+import 'package:uuid/uuid.dart';
 import '../../data/local/drift/app_database.dart';
 import '../../domain/models/calendar_event.dart';
 import '../../domain/models/milestone_input.dart';
@@ -759,8 +760,63 @@ class NeonCloudTaskRepository implements TaskRepository {
   }
 
   @override
-  Future<void> updateCalendarEvent(CalendarEventItem event) async {
+  Future<void> updateCalendarEvent(
+    CalendarEventItem event, {
+    EventRecurrence recurrence = EventRecurrence.none,
+    int recurrenceCount = 1,
+  }) async {
+    String? rule = recurrence != EventRecurrence.none ? recurrence.name : event.recurrenceRule;
+    String? groupId = event.recurrenceGroupId;
+    List<Map<String, dynamic>> extraOccurrences = [];
+
+    // Si l'événement n'était pas récurrent et qu'on le rend récurrent
+    if (!event.isRecurring && recurrence != EventRecurrence.none && recurrenceCount > 1) {
+      groupId = const Uuid().v4();
+      rule = recurrence.name;
+      final occurrences = recurrence.generateOccurrences(
+        startTime: event.startTime,
+        endTime: event.endTime,
+        count: recurrenceCount,
+      );
+      // Les occurrences 1..N (l'occurrence 0 étant l'événement lui-même qu'on met à jour)
+      for (int i = 1; i < occurrences.length; i++) {
+        final occ = occurrences[i];
+        extraOccurrences.add({
+          'id': const Uuid().v4(),
+          'title': event.title,
+          'category': event.category.dbValue,
+          'startTime': occ.start.toIso8601String(),
+          'endTime': occ.end.toIso8601String(),
+          'participantsOrLocation': event.participantsOrLocation,
+          'externalRef': event.externalRef,
+          'notes': event.notes,
+          'recurrenceRule': rule,
+          'recurrenceGroupId': groupId,
+        });
+      }
+    } else if (event.isRecurring && recurrence == EventRecurrence.none) {
+      rule = null;
+      groupId = null;
+    }
+
+    await http.put(
+      Uri.parse('$baseUrl/calendar-events/${event.id}'),
+      headers: _headers,
+      body: jsonEncode({
+        'title': event.title,
+        'category': event.category.dbValue,
+        'startTime': event.startTime.toIso8601String(),
+        'endTime': event.endTime.toIso8601String(),
+        'participantsOrLocation': event.participantsOrLocation,
+        'externalRef': event.externalRef,
+        'notes': event.notes,
+        'recurrenceRule': rule,
+        'recurrenceGroupId': groupId,
+        'occurrences': extraOccurrences,
+      }),
+    );
     _notify();
+    broadcastSyncEvent('mutation');
   }
 
   @override

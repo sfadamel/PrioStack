@@ -641,6 +641,78 @@ app.post('/api/calendar-events', authMiddleware, async (req, res) => {
   }
 });
 
+app.put('/api/calendar-events/:id', authMiddleware, async (req, res) => {
+  const {
+    title,
+    category,
+    startTime,
+    endTime,
+    participantsOrLocation,
+    externalRef,
+    notes,
+    recurrenceRule,
+    recurrenceGroupId,
+    occurrences,
+  } = req.body;
+
+  try {
+    const result = await pool.query(
+      `UPDATE calendar_events
+       SET title = $1, category = $2, start_time = $3, end_time = $4,
+           participants_or_location = $5, external_ref = $6, notes = $7,
+           recurrence_rule = $8, recurrence_group_id = $9, updated_at = NOW()
+       WHERE id = $10 AND user_id = $11
+       RETURNING *`,
+      [
+        title,
+        category || 'meeting',
+        startTime,
+        endTime,
+        participantsOrLocation || null,
+        externalRef || null,
+        notes || null,
+        recurrenceRule || null,
+        recurrenceGroupId || null,
+        req.params.id,
+        req.user.id,
+      ]
+    );
+
+    if (Array.isArray(occurrences) && occurrences.length > 0) {
+      const crypto = require('crypto');
+      for (const occ of occurrences) {
+        const occId = occ.id || crypto.randomUUID();
+        await pool.query(
+          `INSERT INTO calendar_events
+           (id, user_id, workspace_id, title, category, start_time, end_time,
+            participants_or_location, external_ref, notes, recurrence_rule, recurrence_group_id,
+            is_completed, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, FALSE, NOW(), NOW())`,
+          [
+            occId,
+            req.user.id,
+            req.user.workspace_id || 'wks_damelit_arch',
+            occ.title || title,
+            occ.category || category || 'meeting',
+            occ.startTime,
+            occ.endTime,
+            occ.participantsOrLocation || participantsOrLocation || null,
+            occ.externalRef || externalRef || null,
+            occ.notes || notes || null,
+            occ.recurrenceRule || recurrenceRule || null,
+            occ.recurrenceGroupId || recurrenceGroupId || null,
+          ]
+        );
+      }
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Erreur mise à jour événement calendrier:', err);
+    res.status(500).json({ error: 'Erreur mise à jour événement calendrier' });
+  }
+});
+
 app.patch('/api/calendar-events/:id/toggle', authMiddleware, async (req, res) => {
   const { isCompleted } = req.body;
   try {

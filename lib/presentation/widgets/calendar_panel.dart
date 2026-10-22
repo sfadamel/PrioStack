@@ -1875,7 +1875,9 @@ Future<void> showAddOrEditCalendarEventDialog(
   final refCtrl = TextEditingController(text: existingEvent?.externalRef ?? '');
   final notesCtrl = TextEditingController(text: existingEvent?.notes ?? '');
 
-  EventRecurrence selectedRecurrence = EventRecurrence.none;
+  EventRecurrence selectedRecurrence = existingEvent?.recurrenceRule != null
+      ? EventRecurrence.fromString(existingEvent!.recurrenceRule)
+      : EventRecurrence.none;
   int recurrenceCount = 8;
 
   await showDialog<void>(
@@ -2154,62 +2156,67 @@ Future<void> showAddOrEditCalendarEventDialog(
                       ),
                     ),
 
-                    // Section Récurrence / Périodicité (lors de la création)
-                    if (existingEvent == null) ...[
-                      const SizedBox(height: 14),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppTheme.surfaceElevated.withValues(alpha: 0.5),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppTheme.borderSubtle),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Row(
-                              children: [
-                                Icon(Icons.repeat_rounded,
-                                    size: 16, color: AppTheme.accentBlue),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Périodicité / Récurrence',
-                                  style: TextStyle(
-                                    color: AppTheme.accentBlue,
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                    // Section Récurrence / Périodicité (création ou modification)
+                    const SizedBox(height: 14),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surfaceElevated.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppTheme.borderSubtle),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.repeat_rounded,
+                                  size: 16, color: AppTheme.accentBlue),
+                              const SizedBox(width: 8),
+                              Text(
+                                existingEvent != null && (existingEvent.isRecurring)
+                                    ? 'Périodicité / Récurrence (Série existante)'
+                                    : (existingEvent != null
+                                        ? 'Rendre cet événement périodique / récurrent'
+                                        : 'Périodicité / Récurrence'),
+                                style: const TextStyle(
+                                  color: AppTheme.accentBlue,
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: EventRecurrence.values.map((rec) {
-                                final isSel = selectedRecurrence == rec;
-                                return ChoiceChip(
-                                  label: Text(rec.label),
-                                  selected: isSel,
-                                  onSelected: (_) => setModalState(
-                                      () => selectedRecurrence = rec),
-                                  selectedColor:
-                                      AppTheme.accentBlue.withValues(alpha: 0.22),
-                                  labelStyle: TextStyle(
-                                    color: isSel
-                                        ? AppTheme.accentBlue
-                                        : AppTheme.textSecondary,
-                                    fontSize: 11,
-                                    fontWeight: isSel
-                                        ? FontWeight.w700
-                                        : FontWeight.w500,
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 4, vertical: 0),
-                                );
-                              }).toList(),
-                            ),
-                            if (selectedRecurrence != EventRecurrence.none) ...[
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: EventRecurrence.values.map((rec) {
+                              final isSel = selectedRecurrence == rec;
+                              return ChoiceChip(
+                                label: Text(rec.label),
+                                selected: isSel,
+                                onSelected: (_) => setModalState(
+                                    () => selectedRecurrence = rec),
+                                selectedColor:
+                                    AppTheme.accentBlue.withValues(alpha: 0.22),
+                                labelStyle: TextStyle(
+                                  color: isSel
+                                      ? AppTheme.accentBlue
+                                      : AppTheme.textSecondary,
+                                  fontSize: 11,
+                                  fontWeight: isSel
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 4, vertical: 0),
+                              );
+                            }).toList(),
+                          ),
+                          if (selectedRecurrence != EventRecurrence.none) ...[
+                            // Si nouvel événement OU événement existant transformé en série récurrente
+                            if (existingEvent == null || !existingEvent.isRecurring) ...[
                               const SizedBox(height: 10),
                               Row(
                                 children: [
@@ -2316,7 +2323,17 @@ Future<void> showAddOrEditCalendarEventDialog(
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                '↳ $recurrenceCount événements seront planifiés automatiquement (${selectedRecurrence.label.toLowerCase()}).',
+                                '↳ $recurrenceCount événements seront planifiés automatiquement (${selectedRecurrence.label.toLowerCase()}) à partir de cette date.',
+                                style: const TextStyle(
+                                  color: AppTheme.accentBlue,
+                                  fontSize: 10.5,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ] else ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                '↳ Cet événement fait partie d\'une série périodique (${selectedRecurrence.label.toLowerCase()}).',
                                 style: const TextStyle(
                                   color: AppTheme.accentBlue,
                                   fontSize: 10.5,
@@ -2325,9 +2342,9 @@ Future<void> showAddOrEditCalendarEventDialog(
                               ),
                             ],
                           ],
-                        ),
+                        ],
                       ),
-                    ],
+                    ),
 
                     // Section directe Prise de Notes de Réunion (si événement existant)
                     if (existingEvent != null) ...[
@@ -2458,6 +2475,8 @@ Future<void> showAddOrEditCalendarEventDialog(
                                 ? null
                                 : notesCtrl.text.trim(),
                           ),
+                          recurrence: selectedRecurrence,
+                          recurrenceCount: recurrenceCount,
                         );
                   } else {
                     await ref.read(taskRepositoryProvider).addCalendarEvent(
