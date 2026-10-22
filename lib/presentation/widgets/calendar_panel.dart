@@ -2457,60 +2457,97 @@ Future<void> showAddOrEditCalendarEventDialog(
                     endDt = startDt.add(const Duration(minutes: 45));
                   }
 
-                  if (existingEvent != null) {
-                    final updatedItem = CalendarEventItem(
-                      id: existingEvent.id,
-                      userId: existingEvent.userId,
-                      workspaceId: existingEvent.workspaceId,
-                      visibility: existingEvent.visibility,
-                      syncStatus: 'pending',
-                      createdAt: existingEvent.createdAt,
-                      updatedAt: DateTime.now(),
-                      title: titleCtrl.text.trim(),
-                      category: selectedCategory,
-                      startTime: startDt,
-                      endTime: endDt,
-                      participantsOrLocation:
-                          locationCtrl.text.trim().isEmpty
-                              ? null
-                              : locationCtrl.text.trim(),
-                      externalRef: refCtrl.text.trim().isEmpty
-                          ? null
-                          : refCtrl.text.trim(),
-                      notes: notesCtrl.text.trim().isEmpty
-                          ? null
-                          : notesCtrl.text.trim(),
-                      isCompleted: existingEvent.isCompleted,
-                      linkedTaskId: existingEvent.linkedTaskId,
-                      recurrenceRule: selectedRecurrence != EventRecurrence.none
-                          ? selectedRecurrence.dbValue
-                          : null,
-                      recurrenceGroupId: selectedRecurrence != EventRecurrence.none
-                          ? existingEvent.recurrenceGroupId
-                          : null,
-                    );
-                    await ref.read(taskRepositoryProvider).updateCalendarEvent(
-                          updatedItem,
-                          recurrence: selectedRecurrence,
-                          recurrenceCount: recurrenceCount,
-                        );
-                  } else {
-                    await ref.read(taskRepositoryProvider).addCalendarEvent(
-                          title: titleCtrl.text.trim(),
-                          category: selectedCategory,
-                          startTime: startDt,
-                          endTime: endDt,
-                          participantsOrLocation: locationCtrl.text.trim(),
-                          externalRef: refCtrl.text.trim(),
-                          notes: notesCtrl.text.trim(),
-                          recurrence: selectedRecurrence,
-                          recurrenceCount: recurrenceCount,
-                        );
+                  try {
+                    if (existingEvent != null) {
+                      final updatedItem = CalendarEventItem(
+                        id: existingEvent.id,
+                        userId: existingEvent.userId,
+                        workspaceId: existingEvent.workspaceId,
+                        visibility: existingEvent.visibility,
+                        syncStatus: 'pending',
+                        createdAt: existingEvent.createdAt,
+                        updatedAt: DateTime.now(),
+                        title: titleCtrl.text.trim(),
+                        category: selectedCategory,
+                        startTime: startDt,
+                        endTime: endDt,
+                        participantsOrLocation:
+                            locationCtrl.text.trim().isEmpty
+                                ? null
+                                : locationCtrl.text.trim(),
+                        externalRef: refCtrl.text.trim().isEmpty
+                            ? null
+                            : refCtrl.text.trim(),
+                        notes: notesCtrl.text.trim().isEmpty
+                            ? null
+                            : notesCtrl.text.trim(),
+                        isCompleted: existingEvent.isCompleted,
+                        linkedTaskId: existingEvent.linkedTaskId,
+                        recurrenceRule: selectedRecurrence != EventRecurrence.none
+                            ? selectedRecurrence.dbValue
+                            : null,
+                        recurrenceGroupId: selectedRecurrence != EventRecurrence.none
+                            ? existingEvent.recurrenceGroupId
+                            : null,
+                      );
+                      await ref.read(taskRepositoryProvider).updateCalendarEvent(
+                            updatedItem,
+                            recurrence: selectedRecurrence,
+                            recurrenceCount: recurrenceCount,
+                          );
+                    } else {
+                      await ref.read(taskRepositoryProvider).addCalendarEvent(
+                            title: titleCtrl.text.trim(),
+                            category: selectedCategory,
+                            startTime: startDt,
+                            endTime: endDt,
+                            participantsOrLocation: locationCtrl.text.trim(),
+                            externalRef: refCtrl.text.trim(),
+                            notes: notesCtrl.text.trim(),
+                            recurrence: selectedRecurrence,
+                            recurrenceCount: recurrenceCount,
+                          );
+                    }
+                    ref
+                        .read(selectedCalendarDateProvider.notifier)
+                        .selectDate(selectedDay);
+                    if (ctx.mounted) Navigator.pop(ctx);
+
+                    if (context.mounted) {
+                      final isNewSeries = existingEvent == null && selectedRecurrence != EventRecurrence.none;
+                      final isTransformedSeries = existingEvent != null &&
+                          !existingEvent.isRecurring &&
+                          selectedRecurrence != EventRecurrence.none;
+
+                      final msg = isTransformedSeries
+                          ? '✓ Événement mis à jour et transformé en série récurrente ($recurrenceCount occurrences)'
+                          : (isNewSeries
+                              ? '✓ Série récurrente planifiée ($recurrenceCount occurrences)'
+                              : (existingEvent != null
+                                  ? '✓ Événement mis à jour avec succès'
+                                  : '✓ Événement planifié avec succès'));
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(msg),
+                          backgroundColor: AppTheme.accentBlue,
+                          behavior: SnackBarBehavior.floating,
+                          duration: const Duration(seconds: 3),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Erreur lors de l\'enregistrement: $e'),
+                          backgroundColor: AppTheme.neonPink,
+                          behavior: SnackBarBehavior.floating,
+                          duration: const Duration(seconds: 4),
+                        ),
+                      );
+                    }
                   }
-                  ref
-                      .read(selectedCalendarDateProvider.notifier)
-                      .selectDate(selectedDay);
-                  if (ctx.mounted) Navigator.pop(ctx);
                 },
                 icon:
                     const Icon(Icons.check_rounded, size: 16, color: Colors.white),

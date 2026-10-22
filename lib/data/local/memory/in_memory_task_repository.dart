@@ -1371,7 +1371,9 @@ class InMemoryTaskRepository implements TaskRepository {
     String? groupId = event.recurrenceGroupId;
     final now = DateTime.now();
 
-    if (!event.isRecurring && recurrence != EventRecurrence.none && recurrenceCount > 1) {
+    final isBecomingRecurring = groupId == null && recurrence != EventRecurrence.none && recurrenceCount > 1;
+
+    if (isBecomingRecurring) {
       groupId = const Uuid().v4();
       rule = recurrence.dbValue;
       final occurrences = recurrence.generateOccurrences(
@@ -1400,7 +1402,7 @@ class InMemoryTaskRepository implements TaskRepository {
           syncStatus: SyncStatus.pending.dbValue,
         ));
       }
-    } else if (event.isRecurring && recurrence == EventRecurrence.none) {
+    } else if (recurrence == EventRecurrence.none) {
       rule = null;
       groupId = null;
     }

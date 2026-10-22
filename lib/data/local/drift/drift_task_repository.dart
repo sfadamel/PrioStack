@@ -1074,7 +1074,9 @@ class DriftTaskRepository implements TaskRepository {
     String? rule = recurrence != EventRecurrence.none ? recurrence.dbValue : event.recurrenceRule;
     String? groupId = event.recurrenceGroupId;
 
-    if (!event.isRecurring && recurrence != EventRecurrence.none && recurrenceCount > 1) {
+    final isBecomingRecurring = groupId == null && recurrence != EventRecurrence.none && recurrenceCount > 1;
+
+    if (isBecomingRecurring) {
       groupId = const Uuid().v4();
       rule = recurrence.dbValue;
       final occurrences = recurrence.generateOccurrences(
@@ -1111,7 +1113,7 @@ class DriftTaskRepository implements TaskRepository {
           ],
         );
       }
-    } else if (event.isRecurring && recurrence == EventRecurrence.none) {
+    } else if (recurrence == EventRecurrence.none) {
       rule = null;
       groupId = null;
     }

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
@@ -673,6 +674,42 @@ class NeonCloudTaskRepository implements TaskRepository {
     _notify();
   }
 
+  static const String _kRecurTagPrefix = '<!--priostack_recur:';
+  static const String _kRecurTagSuffix = '-->';
+
+  static String? _embedRecurrenceInNotes(String? notes, String? rule, String? groupId) {
+    if (rule == null || groupId == null) return notes;
+    final tag = '$_kRecurTagPrefix$rule:$groupId$_kRecurTagSuffix';
+    if (notes == null || notes.trim().isEmpty) return tag;
+    final regex = RegExp(r'<!--priostack_recur:[^>]+-->');
+    if (regex.hasMatch(notes)) {
+      return notes.replaceFirst(regex, tag);
+    }
+    return '${notes.trim()}\n$tag';
+  }
+
+  static ({String? rule, String? groupId, String? cleanNotes}) _extractRecurrence(
+    String? notes,
+    String? ruleCol,
+    String? groupCol,
+  ) {
+    String? rule = (ruleCol != null && ruleCol.isNotEmpty && ruleCol != 'none') ? ruleCol : null;
+    String? groupId = (groupCol != null && groupCol.isNotEmpty) ? groupCol : null;
+    String? clean = notes;
+
+    if (notes != null && notes.contains(_kRecurTagPrefix)) {
+      final regex = RegExp(r'<!--priostack_recur:([^:]+):([^>]+)-->');
+      final match = regex.firstMatch(notes);
+      if (match != null) {
+        rule ??= match.group(1);
+        groupId ??= match.group(2);
+        clean = notes.replaceFirst(regex, '').trim();
+        if (clean.isEmpty) clean = null;
+      }
+    }
+    return (rule: rule, groupId: groupId, cleanNotes: clean);
+  }
+
   // --- CALENDRIER & AGENDA ---
   @override
   Stream<List<CalendarEventItem>> watchCalendarEvents() {
@@ -683,29 +720,39 @@ class NeonCloudTaskRepository implements TaskRepository {
           final list = jsonDecode(resp.body) as List;
           return list.map((item) {
             final e = item as Map<String, dynamic>;
+            final rawNotes = e['notes'] as String?;
+            final parsed = _extractRecurrence(
+              rawNotes,
+              e['recurrence_rule'] as String?,
+              e['recurrence_group_id'] as String?,
+            );
+
             return CalendarEventItem(
               id: e['id'] as String,
               userId: e['user_id'] as String? ?? 'usr_01',
               workspaceId: 'wks_damelit_arch',
               visibility: e['visibility'] as String? ?? 'team',
               syncStatus: 'synced',
-              createdAt: DateTime.tryParse(e['created_at'] as String? ?? '') ?? DateTime.now(),
-              updatedAt: DateTime.tryParse(e['updated_at'] as String? ?? '') ?? DateTime.now(),
+              createdAt: DateTime.tryParse(e['created_at'] as String? ?? '')?.toLocal() ?? DateTime.now(),
+              updatedAt: DateTime.tryParse(e['updated_at'] as String? ?? '')?.toLocal() ?? DateTime.now(),
               title: e['title'] as String,
               category: CalendarEventCategory.fromDb(e['category'] as String? ?? 'meeting'),
-              startTime: DateTime.tryParse(e['start_time'] as String? ?? '') ?? DateTime.now(),
-              endTime: DateTime.tryParse(e['end_time'] as String? ?? '') ?? DateTime.now().add(const Duration(hours: 1)),
+              startTime: DateTime.tryParse(e['start_time'] as String? ?? '')?.toLocal() ?? DateTime.now(),
+              endTime: DateTime.tryParse(e['end_time'] as String? ?? '')?.toLocal() ?? DateTime.now().add(const Duration(hours: 1)),
               participantsOrLocation: e['participants_or_location'] as String?,
               externalRef: e['external_ref'] as String?,
-              notes: e['notes'] as String?,
+              notes: parsed.cleanNotes,
               isCompleted: e['is_completed'] as bool? ?? false,
               linkedTaskId: e['linked_task_id'] as String?,
-              recurrenceRule: e['recurrence_rule'] as String?,
-              recurrenceGroupId: e['recurrence_group_id'] as String?,
+              recurrenceRule: parsed.rule,
+              recurrenceGroupId: parsed.groupId,
+              deletedAt: e['deleted_at'] != null ? DateTime.tryParse(e['deleted_at'] as String)?.toLocal() : null,
             );
           }).toList();
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[NeonCloudTaskRepository] Erreur watchCalendarEvents: $e');
+      }
       return [];
     });
   }
@@ -732,31 +779,41 @@ class NeonCloudTaskRepository implements TaskRepository {
       count: recurrenceCount,
     );
 
-    final resp = await http.post(
-      Uri.parse('$baseUrl/calendar-events'),
-      headers: _headers,
-      body: jsonEncode({
-        'title': title.trim(),
-        'category': category.dbValue,
-        'startTime': startTime.toIso8601String(),
-        'endTime': validEnd.toIso8601String(),
-        'participantsOrLocation': participantsOrLocation,
-        'externalRef': externalRef,
-        'notes': notes,
-        'recurrenceRule': recurrence != EventRecurrence.none ? recurrence.dbValue : null,
-        'occurrences': occurrences.map((occ) => {
+    final groupId = recurrence != EventRecurrence.none && occurrences.length > 1
+        ? const Uuid().v4()
+        : null;
+    final rule = recurrence != EventRecurrence.none ? recurrence.dbValue : null;
+
+    String firstId = '';
+    for (int i = 0; i < occurrences.length; i++) {
+      final occ = occurrences[i];
+      final occNotes = _embedRecurrenceInNotes(notes, rule, groupId);
+      final resp = await http.post(
+        Uri.parse('$baseUrl/calendar-events'),
+        headers: _headers,
+        body: jsonEncode({
+          'title': title.trim(),
+          'category': category.dbValue,
           'startTime': occ.start.toIso8601String(),
           'endTime': occ.end.toIso8601String(),
-        }).toList(),
-      }),
-    );
+          'participantsOrLocation': participantsOrLocation,
+          'externalRef': externalRef,
+          'notes': occNotes,
+          'recurrenceRule': rule,
+          'recurrenceGroupId': groupId,
+        }),
+      );
+      if (i == 0 && resp.statusCode == 201) {
+        try {
+          final data = jsonDecode(resp.body);
+          firstId = data['id'] ?? '';
+        } catch (_) {}
+      }
+    }
+
     _notify();
     broadcastSyncEvent('mutation');
-    if (resp.statusCode == 201) {
-      final created = jsonDecode(resp.body) as Map<String, dynamic>;
-      return created['id'] as String;
-    }
-    return '';
+    return firstId;
   }
 
   @override
@@ -767,10 +824,12 @@ class NeonCloudTaskRepository implements TaskRepository {
   }) async {
     String? rule = recurrence != EventRecurrence.none ? recurrence.dbValue : event.recurrenceRule;
     String? groupId = event.recurrenceGroupId;
-    List<Map<String, dynamic>> extraOccurrences = [];
+    List<({DateTime start, DateTime end})> extraOccurrences = [];
 
-    // Si l'événement n'était pas récurrent et qu'on le rend récurrent
-    if (!event.isRecurring && recurrence != EventRecurrence.none && recurrenceCount > 1) {
+    // Détection : Si l'événement n'avait pas de groupe de récurrence et qu'on le rend récurrent
+    final isBecomingRecurring = groupId == null && recurrence != EventRecurrence.none && recurrenceCount > 1;
+
+    if (isBecomingRecurring) {
       groupId = const Uuid().v4();
       rule = recurrence.dbValue;
       final occurrences = recurrence.generateOccurrences(
@@ -778,63 +837,41 @@ class NeonCloudTaskRepository implements TaskRepository {
         endTime: event.endTime,
         count: recurrenceCount,
       );
-      // Les occurrences 1..N (l'occurrence 0 étant l'événement lui-même qu'on met à jour)
-      for (int i = 1; i < occurrences.length; i++) {
-        final occ = occurrences[i];
-        extraOccurrences.add({
-          'id': const Uuid().v4(),
-          'title': event.title,
-          'category': event.category.dbValue,
-          'startTime': occ.start.toIso8601String(),
-          'endTime': occ.end.toIso8601String(),
-          'participantsOrLocation': event.participantsOrLocation,
-          'externalRef': event.externalRef,
-          'notes': event.notes,
-          'recurrenceRule': rule,
-          'recurrenceGroupId': groupId,
-        });
+      // Les occurrences 1..N-1 à créer en plus de l'événement modifié lui-même
+      if (occurrences.length > 1) {
+        extraOccurrences = occurrences.sublist(1);
       }
-    } else if (event.isRecurring && recurrence == EventRecurrence.none) {
+    } else if (recurrence == EventRecurrence.none) {
       rule = null;
       groupId = null;
     }
+
+    final embeddedNotes = _embedRecurrenceInNotes(event.notes, rule, groupId);
 
     try {
       final resp = await http.put(
         Uri.parse('$baseUrl/calendar-events/${event.id}'),
         headers: _headers,
         body: jsonEncode({
-          'title': event.title,
+          'title': event.title.trim(),
           'category': event.category.dbValue,
           'startTime': event.startTime.toIso8601String(),
           'endTime': event.endTime.toIso8601String(),
           'participantsOrLocation': event.participantsOrLocation,
           'externalRef': event.externalRef,
-          'notes': event.notes,
+          'notes': embeddedNotes,
           'recurrenceRule': rule,
           'recurrenceGroupId': groupId,
-          'occurrences': extraOccurrences,
         }),
       );
 
       // Si le backend renvoie 404 (ex: Render pas encore redéployé avec PUT)
-      // On applique un fallback instantané : suppression de l'ancien événement + recréation avec les nouvelles données
+      // On applique le fallback instantané : suppression de l'ancien événement + recréation avec les nouvelles données
       if (resp.statusCode == 404) {
         await http.delete(
           Uri.parse('$baseUrl/calendar-events/${event.id}'),
           headers: _headers,
         );
-
-        final allOccs = [
-          {
-            'startTime': event.startTime.toIso8601String(),
-            'endTime': event.endTime.toIso8601String(),
-          },
-          ...extraOccurrences.map((o) => {
-            'startTime': o['startTime'],
-            'endTime': o['endTime'],
-          }),
-        ];
 
         await http.post(
           Uri.parse('$baseUrl/calendar-events'),
@@ -846,14 +883,36 @@ class NeonCloudTaskRepository implements TaskRepository {
             'endTime': event.endTime.toIso8601String(),
             'participantsOrLocation': event.participantsOrLocation,
             'externalRef': event.externalRef,
-            'notes': event.notes,
+            'notes': embeddedNotes,
             'recurrenceRule': rule,
             'recurrenceGroupId': groupId,
-            'occurrences': allOccs.length > 1 ? allOccs : null,
           }),
         );
       }
-    } catch (_) {}
+
+      // Si des occurrences supplémentaires doivent être créées (transformation en série récurrente)
+      for (final occ in extraOccurrences) {
+        final occNotes = _embedRecurrenceInNotes(event.notes, rule, groupId);
+        await http.post(
+          Uri.parse('$baseUrl/calendar-events'),
+          headers: _headers,
+          body: jsonEncode({
+            'title': event.title.trim(),
+            'category': event.category.dbValue,
+            'startTime': occ.start.toIso8601String(),
+            'endTime': occ.end.toIso8601String(),
+            'participantsOrLocation': event.participantsOrLocation,
+            'externalRef': event.externalRef,
+            'notes': occNotes,
+            'recurrenceRule': rule,
+            'recurrenceGroupId': groupId,
+          }),
+        );
+      }
+    } catch (e) {
+      debugPrint('[NeonCloudTaskRepository] Erreur updateCalendarEvent: $e');
+      rethrow;
+    }
 
     _notify();
     broadcastSyncEvent('mutation');
@@ -890,7 +949,12 @@ class NeonCloudTaskRepository implements TaskRepository {
           final list = jsonDecode(listResp.body) as List;
           for (final item in list) {
             final e = item as Map<String, dynamic>;
-            if (e['recurrence_group_id'] == recurrenceGroupId) {
+            final parsed = _extractRecurrence(
+              e['notes'] as String?,
+              e['recurrence_rule'] as String?,
+              e['recurrence_group_id'] as String?,
+            );
+            if (parsed.groupId == recurrenceGroupId || e['recurrence_group_id'] == recurrenceGroupId) {
               await http.delete(Uri.parse('$baseUrl/calendar-events/${e['id']}'), headers: _headers);
             }
           }
