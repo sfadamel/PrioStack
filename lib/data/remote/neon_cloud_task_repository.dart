@@ -158,13 +158,13 @@ class NeonCloudTaskRepository implements TaskRepository {
             workspaceId: 'wks_damelit_arch',
             visibility: 'private',
             syncStatus: 'synced',
-            createdAt: DateTime.tryParse(m['created_at'] as String? ?? '') ?? DateTime.now(),
-            updatedAt: DateTime.tryParse(m['updated_at'] as String? ?? '') ?? DateTime.now(),
+            createdAt: DateTime.tryParse(m['created_at'] as String? ?? '')?.toLocal() ?? DateTime.now(),
+            updatedAt: DateTime.tryParse(m['updated_at'] as String? ?? '')?.toLocal() ?? DateTime.now(),
             title: m['title'] as String,
             category: m['category'] as String? ?? 'Infra & Ops',
             isChecked: m['is_checked'] as bool? ?? false,
             sortOrder: m['sort_order'] as int? ?? 0,
-            lastResetAt: m['last_reset_at'] != null ? DateTime.tryParse(m['last_reset_at'] as String) : null,
+            lastResetAt: m['last_reset_at'] != null ? DateTime.tryParse(m['last_reset_at'] as String)?.toLocal() : null,
           );
         }).toList();
       }
@@ -279,8 +279,8 @@ class NeonCloudTaskRepository implements TaskRepository {
               workspaceId: 'wks_damelit_arch',
               visibility: 'private',
               syncStatus: 'synced',
-              createdAt: DateTime.tryParse(mm['created_at'] as String? ?? '') ?? DateTime.now(),
-              updatedAt: DateTime.tryParse(mm['updated_at'] as String? ?? '') ?? DateTime.now(),
+              createdAt: DateTime.tryParse(mm['created_at'] as String? ?? '')?.toLocal() ?? DateTime.now(),
+              updatedAt: DateTime.tryParse(mm['updated_at'] as String? ?? '')?.toLocal() ?? DateTime.now(),
               title: mm['title'] as String,
               durationMinutes: mm['duration_minutes'] as int? ?? 30,
               isDone: mm['is_done'] as bool? ?? false,
@@ -294,8 +294,8 @@ class NeonCloudTaskRepository implements TaskRepository {
             workspaceId: 'wks_damelit_arch',
             visibility: t['visibility'] as String? ?? 'private',
             syncStatus: 'synced',
-            createdAt: DateTime.tryParse(t['created_at'] as String? ?? '') ?? DateTime.now(),
-            updatedAt: DateTime.tryParse(t['updated_at'] as String? ?? '') ?? DateTime.now(),
+            createdAt: DateTime.tryParse(t['created_at'] as String? ?? '')?.toLocal() ?? DateTime.now(),
+            updatedAt: DateTime.tryParse(t['updated_at'] as String? ?? '')?.toLocal() ?? DateTime.now(),
             title: t['title'] as String,
             type: t['type'] as String,
             status: t['status'] as String? ?? 'backlog',
@@ -357,7 +357,9 @@ class NeonCloudTaskRepository implements TaskRepository {
   Stream<List<TaskWithMilestones>> watchCompletedTasks() {
     return _reactiveStream(() async {
       final all = await _fetchTasks();
-      return all.where((t) => t.task.status == TaskStackStatus.done.dbValue).toList();
+      final done = all.where((t) => t.task.status == TaskStackStatus.done.dbValue).toList();
+      done.sort((a, b) => b.task.updatedAt.compareTo(a.task.updatedAt));
+      return done;
     });
   }
 

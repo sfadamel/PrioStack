@@ -1062,20 +1062,48 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
                                 onTap: () => _showEditMilestoneDialog(context, ref, m),
                                 child: Padding(
                                   padding: const EdgeInsets.symmetric(vertical: 2),
-                                  child: Text(
-                                    m.title,
-                                    style: TextStyle(
-                                      color: m.isDone
-                                          ? AppTheme.textMuted
-                                          : AppTheme.textPrimary,
-                                      fontSize: 12.5,
-                                      fontWeight: m.isDone
-                                          ? FontWeight.w400
-                                          : FontWeight.w500,
-                                      decoration: m.isDone
-                                          ? TextDecoration.lineThrough
-                                          : null,
-                                    ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        m.title,
+                                        style: TextStyle(
+                                          color: m.isDone
+                                              ? AppTheme.textMuted
+                                              : AppTheme.textPrimary,
+                                          fontSize: 12.5,
+                                          fontWeight: m.isDone
+                                              ? FontWeight.w400
+                                              : FontWeight.w500,
+                                          decoration: m.isDone
+                                              ? TextDecoration.lineThrough
+                                              : null,
+                                        ),
+                                      ),
+                                      if (m.isDone) ...[
+                                        const SizedBox(height: 1.5),
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(
+                                              Icons.check_circle_rounded,
+                                              size: 10,
+                                              color: AppTheme.neonGreen,
+                                            ),
+                                            const SizedBox(width: 3.5),
+                                            Text(
+                                              'Fait ${_formatCompletionDateTime(m.updatedAt)}',
+                                              style: const TextStyle(
+                                                color: AppTheme.neonGreen,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ],
                                   ),
                                 ),
                               ),
@@ -2049,5 +2077,22 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
       return '${hours}h ${minutes.toString().padLeft(2, '0')}m ${seconds.toString().padLeft(2, '0')}s';
     }
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  String _formatCompletionDateTime(DateTime dt) {
+    final now = DateTime.now();
+    final isToday = dt.year == now.year && dt.month == now.month && dt.day == now.day;
+    final yesterday = now.subtract(const Duration(days: 1));
+    final isYesterday = dt.year == yesterday.year && dt.month == yesterday.month && dt.day == yesterday.day;
+
+    final timeStr = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    if (isToday) {
+      return "Aujourd'hui à $timeStr";
+    } else if (isYesterday) {
+      return "Hier à $timeStr";
+    } else {
+      final dateStr = '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+      return '$dateStr à $timeStr';
+    }
   }
 }

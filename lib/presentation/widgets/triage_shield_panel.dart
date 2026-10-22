@@ -296,19 +296,6 @@ class _TriageShieldPanelState extends ConsumerState<TriageShieldPanel> {
               const SizedBox(width: 4),
               InkWell(
                 borderRadius: BorderRadius.circular(5),
-                onTap: () => showEditTaskDialog(context, ref, task),
-                child: Padding(
-                  padding: const EdgeInsets.all(2),
-                  child: Icon(
-                    Icons.edit_outlined,
-                    size: 13.5,
-                    color: AppTheme.textMuted.withValues(alpha: 0.7),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 4),
-              InkWell(
-                borderRadius: BorderRadius.circular(5),
                 onTap: () =>
                     ref.read(taskRepositoryProvider).deleteTask(task.id),
                 child: Padding(
@@ -330,6 +317,48 @@ class _TriageShieldPanelState extends ConsumerState<TriageShieldPanel> {
               fontSize: 12.5,
               fontWeight: FontWeight.w500,
               height: 1.25,
+            ),
+          ),
+          const SizedBox(height: 6),
+          // Badge Horodatage Terminé (Date & Heure précises de terminaison)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+            decoration: BoxDecoration(
+              color: AppTheme.neonGreen.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: AppTheme.neonGreen.withValues(alpha: 0.25),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.check_circle_rounded,
+                  size: 12,
+                  color: AppTheme.neonGreen,
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  'Terminée ${_formatCompletionDateTime(task.updatedAt)}',
+                  style: const TextStyle(
+                    color: AppTheme.neonGreen,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (task.elapsedSeconds > 0) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    '• Focus : ${_formatElapsed(task.elapsedSeconds)}',
+                    style: TextStyle(
+                      color: AppTheme.textMuted,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
           const SizedBox(height: 10),
@@ -663,5 +692,31 @@ class _TriageShieldPanelState extends ConsumerState<TriageShieldPanel> {
       return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
     }
     return name.isNotEmpty ? name[0].toUpperCase() : 'P';
+  }
+
+  String _formatCompletionDateTime(DateTime dt) {
+    final now = DateTime.now();
+    final isToday = dt.year == now.year && dt.month == now.month && dt.day == now.day;
+    final yesterday = now.subtract(const Duration(days: 1));
+    final isYesterday = dt.year == yesterday.year && dt.month == yesterday.month && dt.day == yesterday.day;
+
+    final timeStr = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    if (isToday) {
+      return "Aujourd'hui à $timeStr";
+    } else if (isYesterday) {
+      return "Hier à $timeStr";
+    } else {
+      final dateStr = '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+      return '$dateStr à $timeStr';
+    }
+  }
+
+  String _formatElapsed(int seconds) {
+    if (seconds < 60) return '${seconds}s';
+    final mins = seconds ~/ 60;
+    if (mins < 60) return '${mins}m';
+    final hrs = mins ~/ 60;
+    final remainMins = mins % 60;
+    return remainMins > 0 ? '${hrs}h ${remainMins}m' : '${hrs}h';
   }
 }

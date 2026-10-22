@@ -798,27 +798,66 @@ class _MeetingNotesPanelState extends ConsumerState<MeetingNotesPanel> {
           ),
           const SizedBox(height: 6),
 
-          // Liste des actions avec possibilité d'injecter directement dans PrioStack
+          // Liste des actions avec possibilité de cocher (avec date & heure de fin) et d'injecter dans PrioStack
           if (meeting.actionItems.isNotEmpty)
             Column(
               children: meeting.actionItems.asMap().entries.map((entry) {
                 final idx = entry.key;
-                final action = entry.value;
+                final rawAction = entry.value;
+                final parsed = _parseActionItem(rawAction);
 
                 return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  padding: const EdgeInsets.symmetric(vertical: 3),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      const Icon(Icons.arrow_right_rounded, size: 16, color: AppTheme.neonAmber),
+                      // Case à cocher pour terminer l'action avec horodatage
+                      InkWell(
+                        borderRadius: BorderRadius.circular(4),
+                        onTap: () => _toggleActionDone(meeting, idx, rawAction),
+                        child: Padding(
+                          padding: const EdgeInsets.all(2),
+                          child: Icon(
+                            parsed.isDone
+                                ? Icons.check_circle_rounded
+                                : Icons.radio_button_unchecked_rounded,
+                            size: 15,
+                            color: parsed.isDone ? AppTheme.neonGreen : AppTheme.neonAmber,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
                       Expanded(
                         child: InkWell(
                           borderRadius: BorderRadius.circular(4),
-                          onTap: () => _showEditActionDialog(context, idx, action),
+                          onTap: () => _showEditActionDialog(context, idx, parsed.text, parsed.completedAt),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                            child: Text(
-                              action,
-                              style: TextStyle(color: AppTheme.textPrimary, fontSize: 11.5),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  parsed.text,
+                                  style: TextStyle(
+                                    color: parsed.isDone ? AppTheme.textMuted : AppTheme.textPrimary,
+                                    fontSize: 11.5,
+                                    fontWeight: parsed.isDone ? FontWeight.w400 : FontWeight.w500,
+                                    decoration: parsed.isDone ? TextDecoration.lineThrough : null,
+                                  ),
+                                ),
+                                if (parsed.isDone) ...[
+                                  const SizedBox(height: 1.5),
+                                  Text(
+                                    'Terminée ${_formatCompletionDateTime(parsed.completedAt ?? meeting.updatedAt)}',
+                                    style: const TextStyle(
+                                      color: AppTheme.neonGreen,
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ),
                         ),
@@ -829,7 +868,7 @@ class _MeetingNotesPanelState extends ConsumerState<MeetingNotesPanel> {
                         icon: const Icon(Icons.edit_outlined, size: 13, color: AppTheme.neonAmber),
                         padding: const EdgeInsets.symmetric(horizontal: 4),
                         constraints: const BoxConstraints(),
-                        onPressed: () => _showEditActionDialog(context, idx, action),
+                        onPressed: () => _showEditActionDialog(context, idx, parsed.text, parsed.completedAt),
                       ),
                       const SizedBox(width: 4),
                       // Bouton Transformer en Tâche PrioStack
@@ -838,7 +877,7 @@ class _MeetingNotesPanelState extends ConsumerState<MeetingNotesPanel> {
                         onTap: () async {
                           await ref
                               .read(meetingNotesProvider.notifier)
-                              .convertActionItemToTask(action);
+                              .convertActionItemToTask(parsed.text);
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
@@ -942,10 +981,40 @@ class _MeetingNotesPanelState extends ConsumerState<MeetingNotesPanel> {
     _newActionCtrl.clear();
   }
 
+  void _toggleActionDone(MeetingNote meeting, int idx, String rawAction) {
+    final parsed = _parseActionItem(rawAction);
+    final updated = List<String>.from(meeting.actionItems);
+    if (parsed.isDone) {
+      updated[idx] = parsed.text;
+    } else {
+      final nowIso = DateTime.now().toIso8601String();
+      updated[idx] = '[x] [$nowIso] ${parsed.text}';
+    }
+    ref.read(meetingNotesProvider.notifier).updateActiveMeeting(actionItems: updated);
+  }
+
+  ({bool isDone, DateTime? completedAt, String text}) _parseActionItem(String raw) {
+    if (raw.startsWith('[x] ')) {
+      final without = raw.substring(4).trim();
+      if (without.startsWith('[')) {
+        final endBracket = without.indexOf(']');
+        if (endBracket != -1) {
+          final dtStr = without.substring(1, endBracket);
+          final parsedDt = DateTime.tryParse(dtStr)?.toLocal();
+          final text = without.substring(endBracket + 1).trim();
+          return (isDone: true, completedAt: parsedDt, text: text);
+        }
+      }
+      return (isDone: true, completedAt: null, text: without);
+    }
+    return (isDone: false, completedAt: null, text: raw);
+  }
+
   Future<void> _showEditActionDialog(
     BuildContext context,
     int index,
     String currentText,
+    [DateTime? completedAt]
   ) async {
     final ctrl = TextEditingController(text: currentText);
     await showDialog<void>(
@@ -1022,7 +1091,11 @@ class _MeetingNotesPanelState extends ConsumerState<MeetingNotesPanel> {
                 if (meeting != null) {
                   final updated = List<String>.from(meeting.actionItems);
                   if (index >= 0 && index < updated.length) {
-                    updated[index] = trimmed;
+                    if (completedAt != null) {
+                      updated[index] = '[x] [${completedAt.toIso8601String()}] $trimmed';
+                    } else {
+                      updated[index] = trimmed;
+                    }
                     ref.read(meetingNotesProvider.notifier).updateActiveMeeting(actionItems: updated);
                   }
                 }
@@ -1150,5 +1223,22 @@ class _MeetingNotesPanelState extends ConsumerState<MeetingNotesPanel> {
         ],
       ),
     );
+  }
+
+  String _formatCompletionDateTime(DateTime dt) {
+    final now = DateTime.now();
+    final isToday = dt.year == now.year && dt.month == now.month && dt.day == now.day;
+    final yesterday = now.subtract(const Duration(days: 1));
+    final isYesterday = dt.year == yesterday.year && dt.month == yesterday.month && dt.day == yesterday.day;
+
+    final timeStr = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    if (isToday) {
+      return "Aujourd'hui à $timeStr";
+    } else if (isYesterday) {
+      return "Hier à $timeStr";
+    } else {
+      final dateStr = '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+      return '$dateStr à $timeStr';
+    }
   }
 }

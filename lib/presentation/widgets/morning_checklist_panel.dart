@@ -370,13 +370,44 @@ class _MorningChecklistPanelState extends ConsumerState<MorningChecklistPanel> {
                               ),
                             ),
                             const SizedBox(height: 2),
-                            Text(
-                              item.category as String,
-                              style: TextStyle(
-                                color: AppTheme.textMuted,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w500,
-                              ),
+                            Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 5,
+                              children: [
+                                Text(
+                                  item.category as String,
+                                  style: TextStyle(
+                                    color: AppTheme.textMuted,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                if (isChecked) ...[
+                                  Text(
+                                    '•',
+                                    style: TextStyle(color: AppTheme.textMuted, fontSize: 10),
+                                  ),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.check_circle_rounded,
+                                        size: 9.5,
+                                        color: AppTheme.neonGreen,
+                                      ),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        'Fait ${_formatCompletionDateTime(item.updatedAt as DateTime)}',
+                                        style: const TextStyle(
+                                          color: AppTheme.neonGreen,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ],
                             ),
                           ],
                         ),
@@ -727,5 +758,22 @@ class _MorningChecklistPanelState extends ConsumerState<MorningChecklistPanel> {
         ),
       ),
     );
+  }
+
+  String _formatCompletionDateTime(DateTime dt) {
+    final now = DateTime.now();
+    final isToday = dt.year == now.year && dt.month == now.month && dt.day == now.day;
+    final yesterday = now.subtract(const Duration(days: 1));
+    final isYesterday = dt.year == yesterday.year && dt.month == yesterday.month && dt.day == yesterday.day;
+
+    final timeStr = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    if (isToday) {
+      return "Aujourd'hui à $timeStr";
+    } else if (isYesterday) {
+      return "Hier à $timeStr";
+    } else {
+      final dateStr = '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+      return '$dateStr à $timeStr';
+    }
   }
 }
