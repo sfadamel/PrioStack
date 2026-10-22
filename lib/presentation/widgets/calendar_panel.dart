@@ -998,6 +998,67 @@ class _CalendarScreenPanelState extends ConsumerState<CalendarScreenPanel> {
     );
   }
 
+  Future<void> _showDeleteRecurringEventDialog(
+    BuildContext context,
+    WidgetRef ref,
+    CalendarEventItem ev,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surfaceCard,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: AppTheme.borderSubtle),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.repeat_rounded, color: AppTheme.accentBlue, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              'Événement récurrent',
+              style: TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 15.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          '« ${ev.title} » fait partie d\'une série d\'événements périodiques (${ev.recurrenceLabel.toLowerCase()}).\n\nQue souhaitez-vous supprimer ?',
+          style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annuler'),
+          ),
+          OutlinedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await ref.read(taskRepositoryProvider).deleteCalendarEvent(ev.id);
+            },
+            child: const Text('Cette occurrence uniquement'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.neonPink),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await ref
+                  .read(taskRepositoryProvider)
+                  .deleteCalendarEventSeries(ev.recurrenceGroupId!);
+            },
+            child: const Text(
+              'Toute la série',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTimelineEventCard(BuildContext context, CalendarEventItem ev) {
     final accent = ev.category.accentColor;
 
@@ -1108,6 +1169,36 @@ class _CalendarScreenPanelState extends ConsumerState<CalendarScreenPanel> {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
+                        if (ev.isRecurring) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppTheme.accentBlue.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: AppTheme.accentBlue.withValues(alpha: 0.35),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.repeat_rounded,
+                                    size: 11, color: AppTheme.accentBlue),
+                                const SizedBox(width: 3.5),
+                                Text(
+                                  ev.recurrenceLabel,
+                                  style: const TextStyle(
+                                    color: AppTheme.accentBlue,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         if (ev.externalRef != null &&
                             ev.externalRef!.isNotEmpty) ...[
                           const SizedBox(width: 8),
@@ -1151,9 +1242,15 @@ class _CalendarScreenPanelState extends ConsumerState<CalendarScreenPanel> {
                         // Supprimer
                         InkWell(
                           borderRadius: BorderRadius.circular(6),
-                          onTap: () => ref
-                              .read(taskRepositoryProvider)
-                              .deleteCalendarEvent(ev.id),
+                          onTap: () {
+                            if (ev.recurrenceGroupId != null) {
+                              _showDeleteRecurringEventDialog(context, ref, ev);
+                            } else {
+                              ref
+                                  .read(taskRepositoryProvider)
+                                  .deleteCalendarEvent(ev.id);
+                            }
+                          },
                           child: Padding(
                             padding: const EdgeInsets.all(4),
                             child: Icon(
@@ -1778,6 +1875,9 @@ Future<void> showAddOrEditCalendarEventDialog(
   final refCtrl = TextEditingController(text: existingEvent?.externalRef ?? '');
   final notesCtrl = TextEditingController(text: existingEvent?.notes ?? '');
 
+  EventRecurrence selectedRecurrence = EventRecurrence.none;
+  int recurrenceCount = 8;
+
   await showDialog<void>(
     context: context,
     builder: (ctx) {
@@ -2054,6 +2154,181 @@ Future<void> showAddOrEditCalendarEventDialog(
                       ),
                     ),
 
+                    // Section Récurrence / Périodicité (lors de la création)
+                    if (existingEvent == null) ...[
+                      const SizedBox(height: 14),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppTheme.surfaceElevated.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppTheme.borderSubtle),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(Icons.repeat_rounded,
+                                    size: 16, color: AppTheme.accentBlue),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Périodicité / Récurrence',
+                                  style: TextStyle(
+                                    color: AppTheme.accentBlue,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: EventRecurrence.values.map((rec) {
+                                final isSel = selectedRecurrence == rec;
+                                return ChoiceChip(
+                                  label: Text(rec.label),
+                                  selected: isSel,
+                                  onSelected: (_) => setModalState(
+                                      () => selectedRecurrence = rec),
+                                  selectedColor:
+                                      AppTheme.accentBlue.withValues(alpha: 0.22),
+                                  labelStyle: TextStyle(
+                                    color: isSel
+                                        ? AppTheme.accentBlue
+                                        : AppTheme.textSecondary,
+                                    fontSize: 11,
+                                    fontWeight: isSel
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 4, vertical: 0),
+                                );
+                              }).toList(),
+                            ),
+                            if (selectedRecurrence != EventRecurrence.none) ...[
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  Text(
+                                    'Répéter : ',
+                                    style: TextStyle(
+                                      color: AppTheme.textSecondary,
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  ...[4, 8, 12, 24].map((cnt) {
+                                    final isCntSel = recurrenceCount == cnt;
+                                    return Padding(
+                                      padding: const EdgeInsets.only(right: 6),
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(6),
+                                        onTap: () => setModalState(
+                                            () => recurrenceCount = cnt),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: isCntSel
+                                                ? AppTheme.accentBlue
+                                                    .withValues(alpha: 0.25)
+                                                : AppTheme.surfaceCard,
+                                            borderRadius:
+                                                BorderRadius.circular(6),
+                                            border: Border.all(
+                                              color: isCntSel
+                                                  ? AppTheme.accentBlue
+                                                  : AppTheme.borderSubtle,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            '$cnt fois',
+                                            style: TextStyle(
+                                              color: isCntSel
+                                                  ? AppTheme.accentBlue
+                                                  : AppTheme.textPrimary,
+                                              fontSize: 11,
+                                              fontWeight: isCntSel
+                                                  ? FontWeight.w700
+                                                  : FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                  const Spacer(),
+                                  // Stepper manuel
+                                  InkWell(
+                                    borderRadius: BorderRadius.circular(6),
+                                    onTap: recurrenceCount > 2
+                                        ? () => setModalState(
+                                            () => recurrenceCount--)
+                                        : null,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.surfaceCard,
+                                        borderRadius:
+                                            BorderRadius.circular(6),
+                                        border: Border.all(
+                                            color: AppTheme.borderSubtle),
+                                      ),
+                                      child: const Icon(Icons.remove, size: 14),
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8),
+                                    child: Text(
+                                      '$recurrenceCount',
+                                      style: TextStyle(
+                                        color: AppTheme.textPrimary,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                  InkWell(
+                                    borderRadius: BorderRadius.circular(6),
+                                    onTap: recurrenceCount < 52
+                                        ? () => setModalState(
+                                            () => recurrenceCount++)
+                                        : null,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.surfaceCard,
+                                        borderRadius:
+                                            BorderRadius.circular(6),
+                                        border: Border.all(
+                                            color: AppTheme.borderSubtle),
+                                      ),
+                                      child: const Icon(Icons.add, size: 14),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                '↳ $recurrenceCount événements seront planifiés automatiquement (${selectedRecurrence.label.toLowerCase()}).',
+                                style: const TextStyle(
+                                  color: AppTheme.accentBlue,
+                                  fontSize: 10.5,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+
                     // Section directe Prise de Notes de Réunion (si événement existant)
                     if (existingEvent != null) ...[
                       const SizedBox(height: 16),
@@ -2193,6 +2468,8 @@ Future<void> showAddOrEditCalendarEventDialog(
                           participantsOrLocation: locationCtrl.text.trim(),
                           externalRef: refCtrl.text.trim(),
                           notes: notesCtrl.text.trim(),
+                          recurrence: selectedRecurrence,
+                          recurrenceCount: recurrenceCount,
                         );
                   }
                   ref

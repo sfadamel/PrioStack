@@ -788,9 +788,18 @@ class DriftTaskRepository implements TaskRepository {
         external_ref TEXT NULL,
         notes TEXT NULL,
         is_completed INTEGER NOT NULL DEFAULT 0,
-        linked_task_id TEXT NULL
+        linked_task_id TEXT NULL,
+        recurrence_rule TEXT NULL,
+        recurrence_group_id TEXT NULL
       );
     ''');
+
+    try {
+      await _db.customStatement('ALTER TABLE calendar_events ADD COLUMN recurrence_rule TEXT NULL');
+    } catch (_) {}
+    try {
+      await _db.customStatement('ALTER TABLE calendar_events ADD COLUMN recurrence_group_id TEXT NULL');
+    } catch (_) {}
 
     final countRows = await _db
         .customSelect('SELECT COUNT(*) AS cnt FROM calendar_events')
@@ -961,6 +970,8 @@ class DriftTaskRepository implements TaskRepository {
         notes: r.readNullable<String>('notes'),
         isCompleted: r.read<int>('is_completed') == 1,
         linkedTaskId: r.readNullable<String>('linked_task_id'),
+        recurrenceRule: r.readNullable<String>('recurrence_rule'),
+        recurrenceGroupId: r.readNullable<String>('recurrence_group_id'),
       );
     }).toList();
   }
@@ -988,44 +999,68 @@ class DriftTaskRepository implements TaskRepository {
     String? participantsOrLocation,
     String? externalRef,
     String? notes,
+    EventRecurrence recurrence = EventRecurrence.none,
+    int recurrenceCount = 1,
   }) async {
     await _ensureCalendarTableAndSeed();
     final now = DateTime.now();
-    final id = _uuid.v4();
+    final firstId = _uuid.v4();
     final validEnd = endTime.isAfter(startTime)
         ? endTime
         : startTime.add(const Duration(minutes: 45));
 
-    await _db.customStatement(
-      '''
-      INSERT INTO calendar_events (
-        id, user_id, workspace_id, visibility, sync_status,
-        created_at, updated_at, deleted_at, title, category,
-        start_time, end_time, participants_or_location, external_ref,
-        notes, is_completed, linked_task_id
-      ) VALUES (?, ?, ?, 'team', 'pending', ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 0, NULL)
-      ''',
-      [
-        id,
-        kDefaultUserId,
-        kDefaultWorkspaceId,
-        now.millisecondsSinceEpoch,
-        now.millisecondsSinceEpoch,
-        title.trim(),
-        category.dbValue,
-        startTime.millisecondsSinceEpoch,
-        validEnd.millisecondsSinceEpoch,
-        participantsOrLocation != null && participantsOrLocation.trim().isNotEmpty
-            ? participantsOrLocation.trim()
-            : null,
-        externalRef != null && externalRef.trim().isNotEmpty
-            ? externalRef.trim()
-            : null,
-        notes != null && notes.trim().isNotEmpty ? notes.trim() : null,
-      ],
+    final occurrences = recurrence.generateOccurrences(
+      startTime: startTime,
+      endTime: validEnd,
+      count: recurrenceCount,
     );
+
+    final recurrenceGroupId = (recurrence != EventRecurrence.none && occurrences.length > 1)
+        ? _uuid.v4()
+        : null;
+
+    final trimmedPart = participantsOrLocation != null && participantsOrLocation.trim().isNotEmpty
+        ? participantsOrLocation.trim()
+        : null;
+    final trimmedRef = externalRef != null && externalRef.trim().isNotEmpty
+        ? externalRef.trim()
+        : null;
+    final trimmedNotes = notes != null && notes.trim().isNotEmpty ? notes.trim() : null;
+
+    for (int i = 0; i < occurrences.length; i++) {
+      final occ = occurrences[i];
+      final occId = i == 0 ? firstId : _uuid.v4();
+
+      await _db.customStatement(
+        '''
+        INSERT INTO calendar_events (
+          id, user_id, workspace_id, visibility, sync_status,
+          created_at, updated_at, deleted_at, title, category,
+          start_time, end_time, participants_or_location, external_ref,
+          notes, is_completed, linked_task_id, recurrence_rule, recurrence_group_id
+        ) VALUES (?, ?, ?, 'team', 'pending', ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, ?)
+        ''',
+        [
+          occId,
+          kDefaultUserId,
+          kDefaultWorkspaceId,
+          now.millisecondsSinceEpoch,
+          now.millisecondsSinceEpoch,
+          title.trim(),
+          category.dbValue,
+          occ.start.millisecondsSinceEpoch,
+          occ.end.millisecondsSinceEpoch,
+          trimmedPart,
+          trimmedRef,
+          trimmedNotes,
+          recurrence != EventRecurrence.none ? recurrence.dbValue : null,
+          recurrenceGroupId,
+        ],
+      );
+    }
+
     _notifyCalendarChanged();
-    return id;
+    return firstId;
   }
 
   @override
@@ -1090,6 +1125,25 @@ class DriftTaskRepository implements TaskRepository {
         now.millisecondsSinceEpoch,
         now.millisecondsSinceEpoch,
         eventId,
+      ],
+    );
+    _notifyCalendarChanged();
+  }
+
+  @override
+  Future<void> deleteCalendarEventSeries(String recurrenceGroupId) async {
+    await _ensureCalendarTableAndSeed();
+    final now = DateTime.now();
+    await _db.customStatement(
+      '''
+      UPDATE calendar_events
+      SET deleted_at = ?, updated_at = ?, sync_status = 'pending'
+      WHERE recurrence_group_id = ?
+      ''',
+      [
+        now.millisecondsSinceEpoch,
+        now.millisecondsSinceEpoch,
+        recurrenceGroupId,
       ],
     );
     _notifyCalendarChanged();

@@ -360,6 +360,8 @@ class WebStorageHelper {
       'notes': e.notes,
       'isCompleted': e.isCompleted,
       'linkedTaskId': e.linkedTaskId,
+      'recurrenceRule': e.recurrenceRule,
+      'recurrenceGroupId': e.recurrenceGroupId,
     };
   }
 
@@ -382,6 +384,8 @@ class WebStorageHelper {
       notes: m['notes'] as String?,
       isCompleted: m['isCompleted'] as bool? ?? false,
       linkedTaskId: m['linkedTaskId'] as String?,
+      recurrenceRule: m['recurrenceRule'] as String?,
+      recurrenceGroupId: m['recurrenceGroupId'] as String?,
     );
   }
 }

@@ -18,6 +18,12 @@ const pool = new Pool({
   connectionTimeoutMillis: 5000,
 });
 
+// Migration schémas dynamiques V2
+pool.query(`
+  ALTER TABLE calendar_events ADD COLUMN IF NOT EXISTS recurrence_rule VARCHAR(50);
+  ALTER TABLE calendar_events ADD COLUMN IF NOT EXISTS recurrence_group_id UUID;
+`).catch(err => console.log('Notice recurrence migration:', err.message));
+
 app.use(cors());
 app.use(express.json());
 
@@ -606,15 +612,31 @@ app.get('/api/calendar-events', authMiddleware, async (req, res) => {
 });
 
 app.post('/api/calendar-events', authMiddleware, async (req, res) => {
-  const { title, category, startTime, endTime, participantsOrLocation, externalRef, notes } = req.body;
+  const { title, category, startTime, endTime, participantsOrLocation, externalRef, notes, recurrenceRule, recurrenceGroupId, occurrences } = req.body;
   try {
+    if (Array.isArray(occurrences) && occurrences.length > 0) {
+      const crypto = require('crypto');
+      const groupId = recurrenceGroupId || (occurrences.length > 1 ? crypto.randomUUID() : null);
+      const inserted = [];
+      for (const occ of occurrences) {
+        const result = await pool.query(
+          `INSERT INTO calendar_events (user_id, title, category, start_time, end_time, participants_or_location, external_ref, notes, recurrence_rule, recurrence_group_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+          [req.user.id, title, category || 'meeting', occ.startTime, occ.endTime, participantsOrLocation, externalRef, notes, recurrenceRule || null, groupId]
+        );
+        inserted.push(result.rows[0]);
+      }
+      return res.status(201).json(inserted[0]);
+    }
+
     const result = await pool.query(
-      `INSERT INTO calendar_events (user_id, title, category, start_time, end_time, participants_or_location, external_ref, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [req.user.id, title, category || 'meeting', startTime, endTime, participantsOrLocation, externalRef, notes]
+      `INSERT INTO calendar_events (user_id, title, category, start_time, end_time, participants_or_location, external_ref, notes, recurrence_rule, recurrence_group_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [req.user.id, title, category || 'meeting', startTime, endTime, participantsOrLocation, externalRef, notes, recurrenceRule || null, recurrenceGroupId || null]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
+    console.error('Erreur création événement:', err);
     res.status(500).json({ error: 'Erreur création événement' });
   }
 });
@@ -641,6 +663,18 @@ app.delete('/api/calendar-events/:id', authMiddleware, async (req, res) => {
     res.json({ message: 'Événement supprimé' });
   } catch (err) {
     res.status(500).json({ error: 'Erreur delete calendar' });
+  }
+});
+
+app.delete('/api/calendar-events/series/:groupId', authMiddleware, async (req, res) => {
+  try {
+    await pool.query(
+      `UPDATE calendar_events SET deleted_at = NOW() WHERE recurrence_group_id = $1 AND user_id = $2`,
+      [req.params.groupId, req.user.id]
+    );
+    res.json({ message: 'Série récurrente supprimée' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur delete series' });
   }
 });
 

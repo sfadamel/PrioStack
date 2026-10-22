@@ -54,6 +54,106 @@ enum CalendarEventCategory {
   }
 }
 
+/// Types de périodicité / récurrence pour les réunions et événements
+enum EventRecurrence {
+  none('none', 'Ponctuel (aucune)'),
+  daily('daily', 'Tous les jours'),
+  weekdays('weekdays', 'Jours ouvrés (Lun - Ven)'),
+  weekly('weekly', 'Toutes les semaines'),
+  biweekly('biweekly', 'Toutes les 2 semaines'),
+  monthly('monthly', 'Tous les mois');
+
+  final String dbValue;
+  final String label;
+  const EventRecurrence(this.dbValue, this.label);
+
+  static EventRecurrence fromDb(String? value) {
+    if (value == null) return EventRecurrence.none;
+    return EventRecurrence.values.firstWhere(
+      (e) => e.dbValue == value,
+      orElse: () => EventRecurrence.none,
+    );
+  }
+
+  /// Génère la liste des plages [start, end] pour le nombre d'occurrences demandé
+  List<({DateTime start, DateTime end})> generateOccurrences({
+    required DateTime startTime,
+    required DateTime endTime,
+    int count = 1,
+  }) {
+    if (this == EventRecurrence.none || count <= 1) {
+      return [(start: startTime, end: endTime)];
+    }
+
+    final duration = endTime.difference(startTime);
+    final results = <({DateTime start, DateTime end})>[];
+
+    switch (this) {
+      case EventRecurrence.none:
+        results.add((start: startTime, end: endTime));
+        break;
+
+      case EventRecurrence.daily:
+        for (int i = 0; i < count; i++) {
+          final s = startTime.add(Duration(days: i));
+          results.add((start: s, end: s.add(duration)));
+        }
+        break;
+
+      case EventRecurrence.weekdays:
+        DateTime curr = startTime;
+        while (results.length < count) {
+          if (curr.weekday != DateTime.saturday && curr.weekday != DateTime.sunday) {
+            results.add((start: curr, end: curr.add(duration)));
+          }
+          curr = curr.add(const Duration(days: 1));
+        }
+        break;
+
+      case EventRecurrence.weekly:
+        for (int i = 0; i < count; i++) {
+          final s = DateTime(
+            startTime.year,
+            startTime.month,
+            startTime.day + (7 * i),
+            startTime.hour,
+            startTime.minute,
+          );
+          results.add((start: s, end: s.add(duration)));
+        }
+        break;
+
+      case EventRecurrence.biweekly:
+        for (int i = 0; i < count; i++) {
+          final s = DateTime(
+            startTime.year,
+            startTime.month,
+            startTime.day + (14 * i),
+            startTime.hour,
+            startTime.minute,
+          );
+          results.add((start: s, end: s.add(duration)));
+        }
+        break;
+
+      case EventRecurrence.monthly:
+        for (int i = 0; i < count; i++) {
+          final s = DateTime(
+            startTime.year,
+            startTime.month + i,
+            startTime.day,
+            startTime.hour,
+            startTime.minute,
+          );
+          results.add((start: s, end: s.add(duration)));
+        }
+        break;
+    }
+
+    return results;
+  }
+}
+
 /// Entité V2-Ready ("Sync-Ready") représentant un événement daté du Calendrier (Réunion, Échéance, Créneau Focus)
 class CalendarEventItem {
   final String id;
@@ -74,6 +174,8 @@ class CalendarEventItem {
   final String? notes;
   final bool isCompleted;
   final String? linkedTaskId;
+  final String? recurrenceRule; // 'daily', 'weekdays', 'weekly', 'biweekly', 'monthly'
+  final String? recurrenceGroupId; // UUID regroupant toutes les occurrences d'une série
 
   const CalendarEventItem({
     required this.id,
@@ -93,7 +195,31 @@ class CalendarEventItem {
     this.notes,
     this.isCompleted = false,
     this.linkedTaskId,
+    this.recurrenceRule,
+    this.recurrenceGroupId,
   });
+
+  bool get isRecurring =>
+      recurrenceRule != null &&
+      recurrenceRule!.isNotEmpty &&
+      recurrenceRule != 'none';
+
+  String get recurrenceLabel {
+    switch (recurrenceRule) {
+      case 'daily':
+        return 'Quotidien';
+      case 'weekdays':
+        return 'Jours ouvrés';
+      case 'weekly':
+        return 'Hebdo';
+      case 'biweekly':
+        return 'Bi-hebdo';
+      case 'monthly':
+        return 'Mensuel';
+      default:
+        return 'Récurrent';
+    }
+  }
 
   int get durationMinutes =>
       endTime.difference(startTime).inMinutes.clamp(15, 720);
@@ -144,6 +270,8 @@ class CalendarEventItem {
     String? notes,
     bool? isCompleted,
     String? linkedTaskId,
+    String? recurrenceRule,
+    String? recurrenceGroupId,
   }) {
     return CalendarEventItem(
       id: id ?? this.id,
@@ -164,6 +292,8 @@ class CalendarEventItem {
       notes: notes ?? this.notes,
       isCompleted: isCompleted ?? this.isCompleted,
       linkedTaskId: linkedTaskId ?? this.linkedTaskId,
+      recurrenceRule: recurrenceRule ?? this.recurrenceRule,
+      recurrenceGroupId: recurrenceGroupId ?? this.recurrenceGroupId,
     );
   }
 }

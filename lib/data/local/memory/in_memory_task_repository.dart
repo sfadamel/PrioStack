@@ -1302,39 +1302,62 @@ class InMemoryTaskRepository implements TaskRepository {
     String? participantsOrLocation,
     String? externalRef,
     String? notes,
+    EventRecurrence recurrence = EventRecurrence.none,
+    int recurrenceCount = 1,
   }) async {
     final now = DateTime.now();
-    final id = _uuid.v4();
+    final firstId = _uuid.v4();
     final validEnd = endTime.isAfter(startTime)
         ? endTime
         : startTime.add(const Duration(minutes: 45));
 
-    _calendarEvents.add(
-      CalendarEventItem(
-        id: id,
-        userId: kDefaultUserId,
-        workspaceId: kDefaultWorkspaceId,
-        visibility: 'team',
-        syncStatus: SyncStatus.pending.dbValue,
-        createdAt: now,
-        updatedAt: now,
-        title: title.trim(),
-        category: category,
-        startTime: startTime,
-        endTime: validEnd,
-        participantsOrLocation:
-            participantsOrLocation != null && participantsOrLocation.trim().isNotEmpty
-                ? participantsOrLocation.trim()
-                : null,
-        externalRef: externalRef != null && externalRef.trim().isNotEmpty
-            ? externalRef.trim()
-            : null,
-        notes: notes != null && notes.trim().isNotEmpty ? notes.trim() : null,
-        isCompleted: false,
-      ),
+    final occurrences = recurrence.generateOccurrences(
+      startTime: startTime,
+      endTime: validEnd,
+      count: recurrenceCount,
     );
+
+    final recurrenceGroupId = (recurrence != EventRecurrence.none && occurrences.length > 1)
+        ? _uuid.v4()
+        : null;
+
+    final trimmedPart = participantsOrLocation != null && participantsOrLocation.trim().isNotEmpty
+        ? participantsOrLocation.trim()
+        : null;
+    final trimmedRef = externalRef != null && externalRef.trim().isNotEmpty
+        ? externalRef.trim()
+        : null;
+    final trimmedNotes = notes != null && notes.trim().isNotEmpty ? notes.trim() : null;
+
+    for (int i = 0; i < occurrences.length; i++) {
+      final occ = occurrences[i];
+      final occId = i == 0 ? firstId : _uuid.v4();
+
+      _calendarEvents.add(
+        CalendarEventItem(
+          id: occId,
+          userId: kDefaultUserId,
+          workspaceId: kDefaultWorkspaceId,
+          visibility: 'team',
+          syncStatus: SyncStatus.pending.dbValue,
+          createdAt: now,
+          updatedAt: now,
+          title: title.trim(),
+          category: category,
+          startTime: occ.start,
+          endTime: occ.end,
+          participantsOrLocation: trimmedPart,
+          externalRef: trimmedRef,
+          notes: trimmedNotes,
+          isCompleted: false,
+          recurrenceRule: recurrence != EventRecurrence.none ? recurrence.dbValue : null,
+          recurrenceGroupId: recurrenceGroupId,
+        ),
+      );
+    }
+
     _notify();
-    return id;
+    return firstId;
   }
 
   @override
@@ -1365,6 +1388,12 @@ class InMemoryTaskRepository implements TaskRepository {
   @override
   Future<void> deleteCalendarEvent(String eventId) async {
     _calendarEvents.removeWhere((e) => e.id == eventId);
+    _notify();
+  }
+
+  @override
+  Future<void> deleteCalendarEventSeries(String recurrenceGroupId) async {
+    _calendarEvents.removeWhere((e) => e.recurrenceGroupId == recurrenceGroupId);
     _notify();
   }
 

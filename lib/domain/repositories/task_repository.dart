@@ -190,7 +190,7 @@ abstract class TaskRepository {
   /// Flux réactif des événements du calendrier triés par heure de début
   Stream<List<CalendarEventItem>> watchCalendarEvents();
 
-  /// Planifier un nouvel événement / réunion dans le calendrier
+  /// Planifier un nouvel événement ou une série d'événements périodiques dans le calendrier
   Future<String> addCalendarEvent({
     required String title,
     required CalendarEventCategory category,
@@ -199,6 +199,8 @@ abstract class TaskRepository {
     String? participantsOrLocation,
     String? externalRef,
     String? notes,
+    EventRecurrence recurrence = EventRecurrence.none,
+    int recurrenceCount = 1,
   });
 
   /// Mettre à jour un événement du calendrier
@@ -209,6 +211,9 @@ abstract class TaskRepository {
 
   /// Supprimer un événement du calendrier (Soft-delete V2-Ready via deletedAt)
   Future<void> deleteCalendarEvent(String eventId);
+
+  /// Supprimer l'intégralité d'une série récurrente via son recurrenceGroupId
+  Future<void> deleteCalendarEventSeries(String recurrenceGroupId);
 
   /// 🚨 PUSH Réunion dans la Pile Active :
   /// Met en pause la Tâche de Fond en cours avec Note de reprise obligatoire et place la réunion au sommet de la pile

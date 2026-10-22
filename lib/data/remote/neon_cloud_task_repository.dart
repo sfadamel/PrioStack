@@ -699,6 +699,8 @@ class NeonCloudTaskRepository implements TaskRepository {
               notes: e['notes'] as String?,
               isCompleted: e['is_completed'] as bool? ?? false,
               linkedTaskId: e['linked_task_id'] as String?,
+              recurrenceRule: e['recurrence_rule'] as String?,
+              recurrenceGroupId: e['recurrence_group_id'] as String?,
             );
           }).toList();
         }
@@ -716,21 +718,39 @@ class NeonCloudTaskRepository implements TaskRepository {
     String? participantsOrLocation,
     String? externalRef,
     String? notes,
+    EventRecurrence recurrence = EventRecurrence.none,
+    int recurrenceCount = 1,
   }) async {
+    final validEnd = endTime.isAfter(startTime)
+        ? endTime
+        : startTime.add(const Duration(minutes: 45));
+
+    final occurrences = recurrence.generateOccurrences(
+      startTime: startTime,
+      endTime: validEnd,
+      count: recurrenceCount,
+    );
+
     final resp = await http.post(
       Uri.parse('$baseUrl/calendar-events'),
       headers: _headers,
       body: jsonEncode({
-        'title': title,
+        'title': title.trim(),
         'category': category.dbValue,
         'startTime': startTime.toIso8601String(),
-        'endTime': endTime.toIso8601String(),
+        'endTime': validEnd.toIso8601String(),
         'participantsOrLocation': participantsOrLocation,
         'externalRef': externalRef,
         'notes': notes,
+        'recurrenceRule': recurrence != EventRecurrence.none ? recurrence.dbValue : null,
+        'occurrences': occurrences.map((occ) => {
+          'startTime': occ.start.toIso8601String(),
+          'endTime': occ.end.toIso8601String(),
+        }).toList(),
       }),
     );
     _notify();
+    broadcastSyncEvent('mutation');
     if (resp.statusCode == 201) {
       final created = jsonDecode(resp.body) as Map<String, dynamic>;
       return created['id'] as String;
@@ -757,6 +777,17 @@ class NeonCloudTaskRepository implements TaskRepository {
   Future<void> deleteCalendarEvent(String eventId) async {
     await http.delete(Uri.parse('$baseUrl/calendar-events/$eventId'), headers: _headers);
     _notify();
+    broadcastSyncEvent('mutation');
+  }
+
+  @override
+  Future<void> deleteCalendarEventSeries(String recurrenceGroupId) async {
+    await http.delete(
+      Uri.parse('$baseUrl/calendar-events/series/$recurrenceGroupId'),
+      headers: _headers,
+    );
+    _notify();
+    broadcastSyncEvent('mutation');
   }
 
   @override
