@@ -178,6 +178,27 @@ class BottomStatusBar extends ConsumerWidget {
                   ),
                   const Spacer(),
 
+                  if (constraints.maxWidth >= 780) ...[
+                    Text(
+                      'Propriété Damel-IT',
+                      style: TextStyle(
+                        color: AppTheme.textMuted.withValues(alpha: 0.6),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '•',
+                      style: TextStyle(
+                        color: AppTheme.borderSubtle,
+                        fontSize: 10,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+
                   // Indicateur d'état local + Compteur PUSH
                   Text(
                     'SQLite Local • Sync-Ready',

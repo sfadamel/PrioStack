@@ -339,6 +339,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     style: const TextStyle(color: AppTheme.accentBlue, fontSize: 12),
                   ),
                 ),
+                const SizedBox(height: 12),
+                Center(
+                  child: Text(
+                    'Propriété Damel-IT',
+                    style: TextStyle(
+                      color: AppTheme.textMuted.withValues(alpha: 0.5),
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),

@@ -455,14 +455,31 @@ class _QuickCaptureBarState extends ConsumerState<QuickCaptureBar> {
                           ),
                         ),
                         const SizedBox(width: 9),
-                        Text(
-                          'PrioStack',
-                          style: TextStyle(
-                            color: AppTheme.textPrimary,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 14,
-                            letterSpacing: -0.3,
-                          ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'PrioStack',
+                              style: TextStyle(
+                                color: AppTheme.textPrimary,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 13.5,
+                                letterSpacing: -0.3,
+                                height: 1.1,
+                              ),
+                            ),
+                            Text(
+                              'Propriété Damel-IT',
+                              style: TextStyle(
+                                color: AppTheme.textMuted.withValues(alpha: 0.65),
+                                fontSize: 8.5,
+                                fontWeight: FontWeight.w500,
+                                letterSpacing: 0.2,
+                                height: 1.1,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -552,13 +569,29 @@ class _QuickCaptureBarState extends ConsumerState<QuickCaptureBar> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          'PrioStack',
-                          style: TextStyle(
-                            color: AppTheme.textPrimary,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 14,
-                          ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'PrioStack',
+                              style: TextStyle(
+                                color: AppTheme.textPrimary,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 13.5,
+                                height: 1.1,
+                              ),
+                            ),
+                            Text(
+                              'Propriété Damel-IT',
+                              style: TextStyle(
+                                color: AppTheme.textMuted.withValues(alpha: 0.65),
+                                fontSize: 8,
+                                fontWeight: FontWeight.w500,
+                                height: 1.1,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -947,6 +980,22 @@ class _QuickCaptureBarState extends ConsumerState<QuickCaptureBar> {
                 style: TextStyle(color: AppTheme.neonPink, fontSize: 12.5, fontWeight: FontWeight.w600),
               ),
             ],
+          ),
+        ),
+        const PopupMenuDivider(),
+        PopupMenuItem<String>(
+          enabled: false,
+          height: 24,
+          child: Center(
+            child: Text(
+              'Propriété Damel-IT',
+              style: TextStyle(
+                color: AppTheme.textMuted.withValues(alpha: 0.55),
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.3,
+              ),
+            ),
           ),
         ),
       ],
