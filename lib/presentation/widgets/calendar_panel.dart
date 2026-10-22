@@ -2458,23 +2458,39 @@ Future<void> showAddOrEditCalendarEventDialog(
                   }
 
                   if (existingEvent != null) {
+                    final updatedItem = CalendarEventItem(
+                      id: existingEvent.id,
+                      userId: existingEvent.userId,
+                      workspaceId: existingEvent.workspaceId,
+                      visibility: existingEvent.visibility,
+                      syncStatus: 'pending',
+                      createdAt: existingEvent.createdAt,
+                      updatedAt: DateTime.now(),
+                      title: titleCtrl.text.trim(),
+                      category: selectedCategory,
+                      startTime: startDt,
+                      endTime: endDt,
+                      participantsOrLocation:
+                          locationCtrl.text.trim().isEmpty
+                              ? null
+                              : locationCtrl.text.trim(),
+                      externalRef: refCtrl.text.trim().isEmpty
+                          ? null
+                          : refCtrl.text.trim(),
+                      notes: notesCtrl.text.trim().isEmpty
+                          ? null
+                          : notesCtrl.text.trim(),
+                      isCompleted: existingEvent.isCompleted,
+                      linkedTaskId: existingEvent.linkedTaskId,
+                      recurrenceRule: selectedRecurrence != EventRecurrence.none
+                          ? selectedRecurrence.dbValue
+                          : null,
+                      recurrenceGroupId: selectedRecurrence != EventRecurrence.none
+                          ? existingEvent.recurrenceGroupId
+                          : null,
+                    );
                     await ref.read(taskRepositoryProvider).updateCalendarEvent(
-                          existingEvent.copyWith(
-                            title: titleCtrl.text.trim(),
-                            category: selectedCategory,
-                            startTime: startDt,
-                            endTime: endDt,
-                            participantsOrLocation:
-                                locationCtrl.text.trim().isEmpty
-                                    ? null
-                                    : locationCtrl.text.trim(),
-                            externalRef: refCtrl.text.trim().isEmpty
-                                ? null
-                                : refCtrl.text.trim(),
-                            notes: notesCtrl.text.trim().isEmpty
-                                ? null
-                                : notesCtrl.text.trim(),
-                          ),
+                          updatedItem,
                           recurrence: selectedRecurrence,
                           recurrenceCount: recurrenceCount,
                         );

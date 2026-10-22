@@ -1071,12 +1071,12 @@ class DriftTaskRepository implements TaskRepository {
   }) async {
     await _ensureCalendarTableAndSeed();
     final now = DateTime.now();
-    String? rule = recurrence != EventRecurrence.none ? recurrence.name : event.recurrenceRule;
+    String? rule = recurrence != EventRecurrence.none ? recurrence.dbValue : event.recurrenceRule;
     String? groupId = event.recurrenceGroupId;
 
     if (!event.isRecurring && recurrence != EventRecurrence.none && recurrenceCount > 1) {
       groupId = const Uuid().v4();
-      rule = recurrence.name;
+      rule = recurrence.dbValue;
       final occurrences = recurrence.generateOccurrences(
         startTime: event.startTime,
         endTime: event.endTime,

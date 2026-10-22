@@ -765,14 +765,14 @@ class NeonCloudTaskRepository implements TaskRepository {
     EventRecurrence recurrence = EventRecurrence.none,
     int recurrenceCount = 1,
   }) async {
-    String? rule = recurrence != EventRecurrence.none ? recurrence.name : event.recurrenceRule;
+    String? rule = recurrence != EventRecurrence.none ? recurrence.dbValue : event.recurrenceRule;
     String? groupId = event.recurrenceGroupId;
     List<Map<String, dynamic>> extraOccurrences = [];
 
     // Si l'événement n'était pas récurrent et qu'on le rend récurrent
     if (!event.isRecurring && recurrence != EventRecurrence.none && recurrenceCount > 1) {
       groupId = const Uuid().v4();
-      rule = recurrence.name;
+      rule = recurrence.dbValue;
       final occurrences = recurrence.generateOccurrences(
         startTime: event.startTime,
         endTime: event.endTime,
@@ -799,22 +799,62 @@ class NeonCloudTaskRepository implements TaskRepository {
       groupId = null;
     }
 
-    await http.put(
-      Uri.parse('$baseUrl/calendar-events/${event.id}'),
-      headers: _headers,
-      body: jsonEncode({
-        'title': event.title,
-        'category': event.category.dbValue,
-        'startTime': event.startTime.toIso8601String(),
-        'endTime': event.endTime.toIso8601String(),
-        'participantsOrLocation': event.participantsOrLocation,
-        'externalRef': event.externalRef,
-        'notes': event.notes,
-        'recurrenceRule': rule,
-        'recurrenceGroupId': groupId,
-        'occurrences': extraOccurrences,
-      }),
-    );
+    try {
+      final resp = await http.put(
+        Uri.parse('$baseUrl/calendar-events/${event.id}'),
+        headers: _headers,
+        body: jsonEncode({
+          'title': event.title,
+          'category': event.category.dbValue,
+          'startTime': event.startTime.toIso8601String(),
+          'endTime': event.endTime.toIso8601String(),
+          'participantsOrLocation': event.participantsOrLocation,
+          'externalRef': event.externalRef,
+          'notes': event.notes,
+          'recurrenceRule': rule,
+          'recurrenceGroupId': groupId,
+          'occurrences': extraOccurrences,
+        }),
+      );
+
+      // Si le backend renvoie 404 (ex: Render pas encore redéployé avec PUT)
+      // On applique un fallback instantané : suppression de l'ancien événement + recréation avec les nouvelles données
+      if (resp.statusCode == 404) {
+        await http.delete(
+          Uri.parse('$baseUrl/calendar-events/${event.id}'),
+          headers: _headers,
+        );
+
+        final allOccs = [
+          {
+            'startTime': event.startTime.toIso8601String(),
+            'endTime': event.endTime.toIso8601String(),
+          },
+          ...extraOccurrences.map((o) => {
+            'startTime': o['startTime'],
+            'endTime': o['endTime'],
+          }),
+        ];
+
+        await http.post(
+          Uri.parse('$baseUrl/calendar-events'),
+          headers: _headers,
+          body: jsonEncode({
+            'title': event.title.trim(),
+            'category': event.category.dbValue,
+            'startTime': event.startTime.toIso8601String(),
+            'endTime': event.endTime.toIso8601String(),
+            'participantsOrLocation': event.participantsOrLocation,
+            'externalRef': event.externalRef,
+            'notes': event.notes,
+            'recurrenceRule': rule,
+            'recurrenceGroupId': groupId,
+            'occurrences': allOccs.length > 1 ? allOccs : null,
+          }),
+        );
+      }
+    } catch (_) {}
+
     _notify();
     broadcastSyncEvent('mutation');
   }
@@ -838,10 +878,25 @@ class NeonCloudTaskRepository implements TaskRepository {
 
   @override
   Future<void> deleteCalendarEventSeries(String recurrenceGroupId) async {
-    await http.delete(
+    final resp = await http.delete(
       Uri.parse('$baseUrl/calendar-events/series/$recurrenceGroupId'),
       headers: _headers,
     );
+    // Si le serveur distant n'a pas encore le endpoint groupé, supprimer individuellement les occurrences
+    if (resp.statusCode == 404) {
+      try {
+        final listResp = await http.get(Uri.parse('$baseUrl/calendar-events'), headers: _headers);
+        if (listResp.statusCode == 200) {
+          final list = jsonDecode(listResp.body) as List;
+          for (final item in list) {
+            final e = item as Map<String, dynamic>;
+            if (e['recurrence_group_id'] == recurrenceGroupId) {
+              await http.delete(Uri.parse('$baseUrl/calendar-events/${e['id']}'), headers: _headers);
+            }
+          }
+        }
+      } catch (_) {}
+    }
     _notify();
     broadcastSyncEvent('mutation');
   }

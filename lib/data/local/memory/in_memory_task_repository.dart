@@ -1367,53 +1367,71 @@ class InMemoryTaskRepository implements TaskRepository {
     int recurrenceCount = 1,
   }) async {
     final idx = _calendarEvents.indexWhere((e) => e.id == event.id);
-    if (idx != -1) {
-      String? rule = recurrence != EventRecurrence.none ? recurrence.name : event.recurrenceRule;
-      String? groupId = event.recurrenceGroupId;
-      final now = DateTime.now();
+    String? rule = recurrence != EventRecurrence.none ? recurrence.dbValue : event.recurrenceRule;
+    String? groupId = event.recurrenceGroupId;
+    final now = DateTime.now();
 
-      if (!event.isRecurring && recurrence != EventRecurrence.none && recurrenceCount > 1) {
-        groupId = const Uuid().v4();
-        rule = recurrence.name;
-        final occurrences = recurrence.generateOccurrences(
-          startTime: event.startTime,
-          endTime: event.endTime,
-          count: recurrenceCount,
-        );
-        for (int i = 1; i < occurrences.length; i++) {
-          final occ = occurrences[i];
-          _calendarEvents.add(CalendarEventItem(
-            id: const Uuid().v4(),
-            userId: event.userId,
-            workspaceId: event.workspaceId,
-            title: event.title,
-            category: event.category,
-            startTime: occ.start,
-            endTime: occ.end,
-            participantsOrLocation: event.participantsOrLocation,
-            externalRef: event.externalRef,
-            notes: event.notes,
-            recurrenceRule: rule,
-            recurrenceGroupId: groupId,
-            isCompleted: false,
-            createdAt: now,
-            updatedAt: now,
-            syncStatus: SyncStatus.pending.dbValue,
-          ));
-        }
-      } else if (event.isRecurring && recurrence == EventRecurrence.none) {
-        rule = null;
-        groupId = null;
-      }
-
-      _calendarEvents[idx] = event.copyWith(
-        recurrenceRule: rule,
-        recurrenceGroupId: groupId,
-        updatedAt: now,
-        syncStatus: SyncStatus.pending.dbValue,
+    if (!event.isRecurring && recurrence != EventRecurrence.none && recurrenceCount > 1) {
+      groupId = const Uuid().v4();
+      rule = recurrence.dbValue;
+      final occurrences = recurrence.generateOccurrences(
+        startTime: event.startTime,
+        endTime: event.endTime,
+        count: recurrenceCount,
       );
-      _notify();
+      for (int i = 1; i < occurrences.length; i++) {
+        final occ = occurrences[i];
+        _calendarEvents.add(CalendarEventItem(
+          id: const Uuid().v4(),
+          userId: event.userId,
+          workspaceId: event.workspaceId,
+          title: event.title,
+          category: event.category,
+          startTime: occ.start,
+          endTime: occ.end,
+          participantsOrLocation: event.participantsOrLocation,
+          externalRef: event.externalRef,
+          notes: event.notes,
+          recurrenceRule: rule,
+          recurrenceGroupId: groupId,
+          isCompleted: false,
+          createdAt: now,
+          updatedAt: now,
+          syncStatus: SyncStatus.pending.dbValue,
+        ));
+      }
+    } else if (event.isRecurring && recurrence == EventRecurrence.none) {
+      rule = null;
+      groupId = null;
     }
+
+    final updated = CalendarEventItem(
+      id: event.id,
+      userId: event.userId,
+      workspaceId: event.workspaceId,
+      visibility: event.visibility,
+      syncStatus: SyncStatus.pending.dbValue,
+      createdAt: event.createdAt,
+      updatedAt: now,
+      title: event.title,
+      category: event.category,
+      startTime: event.startTime,
+      endTime: event.endTime,
+      participantsOrLocation: event.participantsOrLocation,
+      externalRef: event.externalRef,
+      notes: event.notes,
+      isCompleted: event.isCompleted,
+      linkedTaskId: event.linkedTaskId,
+      recurrenceRule: rule,
+      recurrenceGroupId: groupId,
+    );
+
+    if (idx != -1) {
+      _calendarEvents[idx] = updated;
+    } else {
+      _calendarEvents.add(updated);
+    }
+    _notify();
   }
 
   @override
