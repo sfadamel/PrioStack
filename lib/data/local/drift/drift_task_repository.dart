@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 import '../../../domain/models/calendar_event.dart';
+import '../../../domain/models/milestone_input.dart';
 import '../../../domain/models/task_enums.dart';
 import '../../../domain/repositories/task_repository.dart';
 import 'app_database.dart';
@@ -142,29 +143,16 @@ class DriftTaskRepository implements TaskRepository {
     final now = DateTime.now();
 
     await _db.transaction(() async {
-      // Si c'est une Tâche de Fond et qu'aucune tâche de fond n'est dans la pile active,
-      // on l'active directement à la base de la pile (WIP = 1).
-      String initialStatus = TaskStackStatus.backlog.dbValue;
-      if (type == TaskType.deepWork) {
-        final activeBaseCount = await (_db.select(_db.prioTasks)
-              ..where((t) =>
-                  t.deletedAt.isNull() &
-                  t.status.isIn([
-                    TaskStackStatus.activeBase.dbValue,
-                    TaskStackStatus.pushedPause.dbValue,
-                  ])))
-            .get();
-        if (activeBaseCount.isEmpty) {
-          initialStatus = TaskStackStatus.activeBase.dbValue;
-        }
-      }
+      // Les nouvelles tâches sont créées par défaut en statut backlog (en attente),
+      // afin de ne pas forcer l'activation immédiate ni rompre le focus en cours.
+      const String initialStatus = 'backlog';
 
       await _db.into(_db.prioTasks).insert(
             PrioTasksCompanion.insert(
               id: Value(newId),
               title: title.trim(),
               type: type.dbValue,
-              status: Value(initialStatus),
+              status: const Value(initialStatus),
               criticality: Value(criticality),
               externalRef: Value(
                 externalRef != null && externalRef.trim().isNotEmpty
@@ -204,6 +192,73 @@ class DriftTaskRepository implements TaskRepository {
                 syncStatus: Value(SyncStatus.pending.dbValue),
               ),
             );
+      }
+    });
+
+    return newId;
+  }
+
+  @override
+  Future<String> createDeepWorkTask({
+    required String title,
+    String? externalRef,
+    String? requesterOrAssignee,
+    int criticality = 2,
+    VisibilityScope visibility = VisibilityScope.privateScope,
+    List<MilestoneInput> milestones = const [],
+    TaskStackStatus status = TaskStackStatus.backlog,
+  }) async {
+    final newId = _uuid.v4();
+    final now = DateTime.now();
+
+    await _db.transaction(() async {
+      await _db.into(_db.prioTasks).insert(
+            PrioTasksCompanion.insert(
+              id: Value(newId),
+              title: title.trim(),
+              type: TaskType.deepWork.dbValue,
+              status: Value(status.dbValue),
+              criticality: Value(criticality),
+              externalRef: Value(
+                externalRef != null && externalRef.trim().isNotEmpty
+                    ? externalRef.trim()
+                    : null,
+              ),
+              requesterOrAssignee: Value(
+                requesterOrAssignee != null && requesterOrAssignee.trim().isNotEmpty
+                    ? requesterOrAssignee.trim()
+                    : null,
+              ),
+              visibility: Value(visibility.dbValue),
+              syncStatus: Value(SyncStatus.pending.dbValue),
+              createdAt: Value(now),
+              updatedAt: Value(now),
+            ),
+          );
+
+      final milestonesToCreate = milestones.isNotEmpty
+          ? milestones
+          : const [
+              MilestoneInput(title: 'Cadrage technique & analyse d\'impact', durationMinutes: 30),
+              MilestoneInput(title: 'Exécution du livrable principal', durationMinutes: 30),
+            ];
+
+      for (int i = 0; i < milestonesToCreate.length; i++) {
+        final m = milestonesToCreate[i];
+        if (m.title.trim().isNotEmpty) {
+          await _db.into(_db.microMilestones).insert(
+                MicroMilestonesCompanion.insert(
+                  id: Value(_uuid.v4()),
+                  taskId: newId,
+                  title: m.title.trim(),
+                  durationMinutes: Value(m.durationMinutes),
+                  sortOrder: Value(i + 1),
+                  syncStatus: Value(SyncStatus.pending.dbValue),
+                  createdAt: Value(now),
+                  updatedAt: Value(now),
+                ),
+              );
+        }
       }
     });
 

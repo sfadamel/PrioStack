@@ -1,5 +1,6 @@
 import '../../data/local/drift/app_database.dart';
 import '../models/calendar_event.dart';
+import '../models/milestone_input.dart';
 import '../models/task_enums.dart';
 
 /// Modèle enrichi d'une tâche avec ses micro-jalons de 30 minutes
@@ -81,6 +82,18 @@ abstract class TaskRepository {
     int criticality = 2,
     VisibilityScope visibility = VisibilityScope.privateScope,
     List<String> initialMilestones = const [],
+  });
+
+  /// Créer une Tâche de Fond complète avec ses micro-jalons sans forcer son activation immédiate
+  /// (par défaut en attente dans la pile / backlog, ne perturbe pas le WIP=1 en cours)
+  Future<String> createDeepWorkTask({
+    required String title,
+    String? externalRef,
+    String? requesterOrAssignee,
+    int criticality = 2,
+    VisibilityScope visibility = VisibilityScope.privateScope,
+    List<MilestoneInput> milestones = const [],
+    TaskStackStatus status = TaskStackStatus.backlog,
   });
 
   /// Basculer l'état d'un item de la Morning Check-list

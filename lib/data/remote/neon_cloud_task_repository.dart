@@ -4,6 +4,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:http/http.dart' as http;
 import '../../data/local/drift/app_database.dart';
 import '../../domain/models/calendar_event.dart';
+import '../../domain/models/milestone_input.dart';
 import '../../domain/models/task_enums.dart';
 import '../../domain/repositories/task_repository.dart';
 import '../local/memory/web_storage_stub.dart'
@@ -406,6 +407,38 @@ class NeonCloudTaskRepository implements TaskRepository {
       }),
     );
     _notify();
+    if (resp.statusCode == 201) {
+      final created = jsonDecode(resp.body) as Map<String, dynamic>;
+      return created['id'] as String;
+    }
+    return '';
+  }
+
+  @override
+  Future<String> createDeepWorkTask({
+    required String title,
+    String? externalRef,
+    String? requesterOrAssignee,
+    int criticality = 2,
+    VisibilityScope visibility = VisibilityScope.privateScope,
+    List<MilestoneInput> milestones = const [],
+    TaskStackStatus status = TaskStackStatus.backlog,
+  }) async {
+    final resp = await http.post(
+      Uri.parse('$baseUrl/tasks'),
+      headers: _headers,
+      body: jsonEncode({
+        'title': title.trim(),
+        'type': TaskType.deepWork.dbValue,
+        'status': status.dbValue,
+        'criticality': criticality,
+        'externalRef': externalRef,
+        'requesterOrAssignee': requesterOrAssignee,
+        'initialMilestones': milestones.map((m) => m.toJson()).toList(),
+      }),
+    );
+    _notify();
+    broadcastSyncEvent('mutation');
     if (resp.statusCode == 201) {
       final created = jsonDecode(resp.body) as Map<String, dynamic>;
       return created['id'] as String;

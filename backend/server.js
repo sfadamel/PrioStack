@@ -291,14 +291,18 @@ app.post('/api/tasks', authMiddleware, async (req, res) => {
 
     if (Array.isArray(initialMilestones) && initialMilestones.length > 0) {
       for (let i = 0; i < initialMilestones.length; i++) {
-        const m = initialMilestones[i];
-        const mRes = await pool.query(
-          `INSERT INTO micro_milestones (task_id, user_id, title, duration_minutes, sort_order)
-           VALUES ($1, $2, $3, 30, $4)
-           RETURNING *`,
-          [createdTask.id, req.user.id, m, i + 1]
-        );
-        createdMilestones.push(mRes.rows[0]);
+        const item = initialMilestones[i];
+        const mTitle = (typeof item === 'object' && item !== null ? item.title : String(item || '')).trim();
+        const mDuration = (typeof item === 'object' && item !== null && item.durationMinutes) ? parseInt(item.durationMinutes) : 30;
+        if (mTitle.length > 0) {
+          const mRes = await pool.query(
+            `INSERT INTO micro_milestones (task_id, user_id, title, duration_minutes, sort_order)
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING *`,
+            [createdTask.id, req.user.id, mTitle, mDuration, i + 1]
+          );
+          createdMilestones.push(mRes.rows[0]);
+        }
       }
     }
 

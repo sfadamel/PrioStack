@@ -6,6 +6,7 @@ import '../../domain/models/task_enums.dart';
 import '../../domain/repositories/task_repository.dart';
 import '../providers/notification_provider.dart';
 import '../providers/priostack_providers.dart';
+import 'create_deep_work_dialog.dart';
 import 'edit_task_dialog.dart';
 import 'sync_reorderable_list.dart';
 
@@ -451,6 +452,42 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
           ),
         ],
         const Spacer(),
+
+        // Bouton : + Tâche de Fond (avec jalons)
+        InkWell(
+          borderRadius: BorderRadius.circular(9),
+          onTap: () => showCreateDeepWorkDialog(
+            context,
+            ref,
+            onCreated: () => setState(() => _showReserveDrawer = true),
+          ),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6.5),
+            decoration: BoxDecoration(
+              color: AppTheme.accentBlue.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(
+                color: AppTheme.accentBlue.withValues(alpha: 0.45),
+              ),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.playlist_add_rounded, size: 16, color: AppTheme.accentBlue),
+                SizedBox(width: 5),
+                Text(
+                  '+ Tâche de Fond',
+                  style: TextStyle(
+                    color: AppTheme.accentBlue,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
 
         // Bouton d'action sobre : Interruption (PUSH)
         InkWell(
@@ -1237,7 +1274,7 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    'Réserve Tâches de Fond (${backlogDeepWork.length})',
+                    'Tâches de Fond en attente (${backlogDeepWork.length})',
                     style: TextStyle(
                       color: AppTheme.textSecondary,
                       fontSize: 11.5,
@@ -1245,6 +1282,33 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
                     ),
                   ),
                   const Spacer(),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(6),
+                    onTap: () => showCreateDeepWorkDialog(
+                      context,
+                      ref,
+                      onCreated: () => setState(() => _showReserveDrawer = true),
+                    ),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.add, size: 13, color: AppTheme.accentBlue),
+                          SizedBox(width: 3),
+                          Text(
+                            'Nouvelle tâche',
+                            style: TextStyle(
+                              color: AppTheme.accentBlue,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   Text(
                     _showReserveDrawer ? 'Masquer' : 'Permuter Focus',
                     style: const TextStyle(
@@ -1301,6 +1365,26 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        if (item.milestones.isNotEmpty) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 1.5),
+                            decoration: BoxDecoration(
+                              color: AppTheme.surfaceElevated,
+                              borderRadius: BorderRadius.circular(5),
+                              border: Border.all(color: AppTheme.borderSubtle),
+                            ),
+                            child: Text(
+                              '${item.milestones.length} jalons',
+                              style: const TextStyle(
+                                color: AppTheme.accentBlue,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
                         IconButton(
                           tooltip: "Modifier l'action / tâche",
                           icon: const Icon(Icons.edit_outlined, size: 13),
@@ -1391,9 +1475,24 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Active une Tâche de Fond ci-dessous ou utilise la barre de commande (Ctrl+K).',
+              'Active une Tâche de Fond ci-dessous ou crée-en une nouvelle avec ses jalons.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.accentBlue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+              ),
+              onPressed: () => showCreateDeepWorkDialog(context, ref),
+              icon: const Icon(Icons.playlist_add_rounded, size: 16),
+              label: const Text(
+                'Créer une Tâche de Fond (Jalons)',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+              ),
             ),
             if (backlog.isNotEmpty) ...[
               const SizedBox(height: 14),

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:drift/drift.dart' show Value;
 import 'package:uuid/uuid.dart';
 import '../../../domain/models/calendar_event.dart';
+import '../../../domain/models/milestone_input.dart';
 import '../../../domain/models/task_enums.dart';
 import '../../../domain/repositories/task_repository.dart';
 import '../drift/app_database.dart';
@@ -634,16 +635,8 @@ class InMemoryTaskRepository implements TaskRepository {
     final newId = _uuid.v4();
     final now = DateTime.now();
 
-    String initialStatus = TaskStackStatus.backlog.dbValue;
-    if (type == TaskType.deepWork) {
-      final hasActiveBase = _tasks.any((t) =>
-          t.deletedAt == null &&
-          (t.status == TaskStackStatus.activeBase.dbValue ||
-              t.status == TaskStackStatus.pushedPause.dbValue));
-      if (!hasActiveBase) {
-        initialStatus = TaskStackStatus.activeBase.dbValue;
-      }
-    }
+    // Les nouvelles tâches sont créées par défaut en attente (backlog)
+    final String initialStatus = TaskStackStatus.backlog.dbValue;
 
     _tasks.insert(
       0,
@@ -701,6 +694,81 @@ class InMemoryTaskRepository implements TaskRepository {
           sortOrder: i + 1,
         ),
       );
+    }
+
+    _notify();
+    return newId;
+  }
+
+  @override
+  Future<String> createDeepWorkTask({
+    required String title,
+    String? externalRef,
+    String? requesterOrAssignee,
+    int criticality = 2,
+    VisibilityScope visibility = VisibilityScope.privateScope,
+    List<MilestoneInput> milestones = const [],
+    TaskStackStatus status = TaskStackStatus.backlog,
+  }) async {
+    final newId = _uuid.v4();
+    final now = DateTime.now();
+
+    _tasks.insert(
+      0,
+      PrioTask(
+        id: newId,
+        userId: kDefaultUserId,
+        workspaceId: kDefaultWorkspaceId,
+        visibility: visibility.dbValue,
+        syncStatus: SyncStatus.pending.dbValue,
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: null,
+        title: title.trim(),
+        type: TaskType.deepWork.dbValue,
+        status: status.dbValue,
+        criticality: criticality,
+        externalRef: externalRef != null && externalRef.trim().isNotEmpty
+            ? externalRef.trim()
+            : null,
+        requesterOrAssignee: requesterOrAssignee != null && requesterOrAssignee.trim().isNotEmpty
+            ? requesterOrAssignee.trim()
+            : null,
+        resumeNote: null,
+        stackOrder: 0,
+        elapsedSeconds: 0,
+        interruptionCount: 0,
+      ),
+    );
+
+    final milestonesToCreate = milestones.isNotEmpty
+        ? milestones
+        : const [
+            MilestoneInput(title: 'Cadrage technique & analyse d\'impact', durationMinutes: 30),
+            MilestoneInput(title: 'Exécution du livrable principal', durationMinutes: 30),
+          ];
+
+    for (int i = 0; i < milestonesToCreate.length; i++) {
+      final m = milestonesToCreate[i];
+      if (m.title.trim().isNotEmpty) {
+        _milestones.add(
+          MicroMilestone(
+            id: _uuid.v4(),
+            taskId: newId,
+            userId: kDefaultUserId,
+            workspaceId: kDefaultWorkspaceId,
+            visibility: 'private',
+            syncStatus: SyncStatus.pending.dbValue,
+            createdAt: now,
+            updatedAt: now,
+            deletedAt: null,
+            title: m.title.trim(),
+            durationMinutes: m.durationMinutes,
+            isDone: false,
+            sortOrder: i + 1,
+          ),
+        );
+      }
     }
 
     _notify();
