@@ -678,7 +678,7 @@ class _CreateDeepWorkDialogState extends ConsumerState<_CreateDeepWorkDialog> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '🚀 Activer immédiatement en Focus actif (WIP = 1)',
+                                '🚀 Activer immédiatement en Focus actif (WIP max 2)',
                                 style: TextStyle(
                                   color: _selectedDestination == TaskStackStatus.activeBase
                                       ? AppTheme.accentBlue

@@ -307,40 +307,44 @@ class DriftTaskRepository implements TaskRepository {
   Future<void> activateDeepWorkTask(String taskId) async {
     final now = DateTime.now();
     await _db.transaction(() async {
-      // Respect strict du WIP Limit = 1 sur la tâche de fond à la base de la pile :
-      // Toute autre tâche de fond active_base ou pushed_pause retourne en backlog.
-      await (_db.update(_db.prioTasks)
-            ..where((t) =>
-                t.type.equals(TaskType.deepWork.dbValue) &
-                t.status.isIn([
-                  TaskStackStatus.activeBase.dbValue,
-                  TaskStackStatus.pushedPause.dbValue,
-                ])))
-          .write(
-        PrioTasksCompanion(
-          status: Value(TaskStackStatus.backlog.dbValue),
-          stackOrder: const Value(0),
-          syncStatus: Value(SyncStatus.pending.dbValue),
-          updatedAt: Value(now),
-        ),
-      );
-
-      // Si une urgence est actuellement au sommet de la pile, la tâche de fond entre en pushed_pause,
-      // sinon elle prend directement le statut active_base.
-      final activeUrgencies = await (_db.select(_db.prioTasks)
+      // Vérifier les tâches actives existantes (max 2)
+      final activeTasks = await (_db.select(_db.prioTasks)
             ..where((t) =>
                 t.deletedAt.isNull() &
-                t.status.equals(TaskStackStatus.activeTop.dbValue)))
+                (t.status.equals(TaskStackStatus.activeBase.dbValue) |
+                 t.status.equals(TaskStackStatus.activeTop.dbValue)))
+            ..orderBy([
+              (t) => OrderingTerm(expression: t.stackOrder, mode: OrderingMode.asc),
+            ]))
           .get();
 
-      final targetStatus = activeUrgencies.isNotEmpty
-          ? TaskStackStatus.pushedPause.dbValue
-          : TaskStackStatus.activeBase.dbValue;
+      // Si 2 tâches sont déjà actives, la plus ancienne passe en sommeil dans la pile
+      if (activeTasks.length >= 2) {
+        final oldestActive = activeTasks.first;
+        await (_db.update(_db.prioTasks)..where((t) => t.id.equals(oldestActive.id))).write(
+          PrioTasksCompanion(
+            status: Value(TaskStackStatus.pushedPause.dbValue),
+            syncStatus: Value(SyncStatus.pending.dbValue),
+            updatedAt: Value(now),
+          ),
+        );
+      }
+
+      int maxOrder = 0;
+      for (final t in activeTasks) {
+        if (t.stackOrder > maxOrder) maxOrder = t.stackOrder;
+      }
+
+      final isFirstActive = activeTasks.isEmpty;
 
       await (_db.update(_db.prioTasks)..where((t) => t.id.equals(taskId))).write(
         PrioTasksCompanion(
-          status: Value(targetStatus),
-          stackOrder: const Value(0),
+          status: Value(
+            isFirstActive
+                ? TaskStackStatus.activeBase.dbValue
+                : TaskStackStatus.activeTop.dbValue,
+          ),
+          stackOrder: Value(maxOrder + 1),
           syncStatus: Value(SyncStatus.pending.dbValue),
           updatedAt: Value(now),
         ),
@@ -552,6 +556,63 @@ class DriftTaskRepository implements TaskRepository {
         updatedAt: Value(DateTime.now()),
       ),
     );
+  }
+
+  @override
+  Future<void> pauseActiveTask(String taskId, {String? resumeNote}) async {
+    final now = DateTime.now();
+    final trimmed = resumeNote?.trim();
+    await (_db.update(_db.prioTasks)..where((t) => t.id.equals(taskId))).write(
+      PrioTasksCompanion(
+        status: Value(TaskStackStatus.pushedPause.dbValue),
+        resumeNote: (trimmed != null && trimmed.isNotEmpty)
+            ? Value(trimmed)
+            : const Value.absent(),
+        syncStatus: Value(SyncStatus.pending.dbValue),
+        updatedAt: Value(now),
+      ),
+    );
+  }
+
+  @override
+  Future<void> resumePausedTask(String taskId) async {
+    final now = DateTime.now();
+    await _db.transaction(() async {
+      // 1. Vérifier si moins de 2 tâches sont actives
+      final activeTasks = await (_db.select(_db.prioTasks)
+            ..where((t) =>
+                t.deletedAt.isNull() &
+                (t.status.equals(TaskStackStatus.activeBase.dbValue) |
+                 t.status.equals(TaskStackStatus.activeTop.dbValue))))
+          .get();
+
+      if (activeTasks.length >= 2) {
+        throw StateError('Limite de 2 tâches actives atteinte');
+      }
+
+      final task = await (_db.select(_db.prioTasks)..where((t) => t.id.equals(taskId))).getSingleOrNull();
+      if (task == null) return;
+
+      int maxOrder = 0;
+      for (final t in activeTasks) {
+        if (t.stackOrder > maxOrder) maxOrder = t.stackOrder;
+      }
+
+      final isBaseDeepWork = task.type == TaskType.deepWork.dbValue && activeTasks.isEmpty;
+
+      await (_db.update(_db.prioTasks)..where((t) => t.id.equals(taskId))).write(
+        PrioTasksCompanion(
+          status: Value(
+            isBaseDeepWork
+                ? TaskStackStatus.activeBase.dbValue
+                : TaskStackStatus.activeTop.dbValue,
+          ),
+          stackOrder: Value(maxOrder + 1),
+          syncStatus: Value(SyncStatus.pending.dbValue),
+          updatedAt: Value(now),
+        ),
+      );
+    });
   }
 
   @override

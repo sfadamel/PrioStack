@@ -420,9 +420,88 @@ app.post('/api/tasks/:id/pop', authMiddleware, async (req, res) => {
   }
 });
 
+// Mettre en sommeil une tâche active (déplacer vers les éléments en pause de la pile)
+app.post('/api/tasks/:id/pause', authMiddleware, async (req, res) => {
+  const taskId = req.params.id;
+  const { resumeNote } = req.body;
+  try {
+    const trimmedResume = typeof resumeNote === 'string' ? resumeNote.trim() : '';
+    let query, values;
+    if (trimmedResume.length > 0) {
+      query = `UPDATE tasks SET status = 'pushed_pause', resume_note = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3 RETURNING *`;
+      values = [trimmedResume, taskId, req.user.id];
+    } else {
+      query = `UPDATE tasks SET status = 'pushed_pause', updated_at = NOW() WHERE id = $1 AND user_id = $2 RETURNING *`;
+      values = [taskId, req.user.id];
+    }
+    const result = await pool.query(query, values);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Tâche non trouvée' });
+    res.json({ message: 'Tâche mise en sommeil avec succès', task: result.rows[0] });
+  } catch (err) {
+    console.error('Erreur mise en sommeil tâche:', err);
+    res.status(500).json({ error: 'Erreur mise en sommeil tâche' });
+  }
+});
+
+// Monter une tâche en sommeil vers l'état actif (max 2 tâches actives)
+app.post('/api/tasks/:id/resume', authMiddleware, async (req, res) => {
+  const taskId = req.params.id;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Vérifier le nombre actuel de tâches actives
+    const activeRes = await client.query(
+      `SELECT id FROM tasks WHERE user_id = $1 AND status IN ('active_base', 'active_top') AND deleted_at IS NULL`,
+      [req.user.id]
+    );
+
+    if (activeRes.rows.length >= 2) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Limite maximale de 2 tâches actives atteinte' });
+    }
+
+    // Récupérer la tâche ciblée
+    const taskRes = await client.query(
+      `SELECT id, type FROM tasks WHERE id = $1 AND user_id = $2`,
+      [taskId, req.user.id]
+    );
+    if (taskRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Tâche non trouvée' });
+    }
+    const task = taskRes.rows[0];
+
+    // Trouver le plus haut stack_order actuel
+    const orderRes = await client.query(
+      `SELECT COALESCE(MAX(stack_order), 0) as max_order FROM tasks WHERE user_id = $1`,
+      [req.user.id]
+    );
+    const nextOrder = parseInt(orderRes.rows[0].max_order) + 1;
+
+    const newStatus = (task.type === 'deep_work' && activeRes.rows.length === 0)
+        ? 'active_base'
+        : 'active_top';
+
+    const upRes = await client.query(
+      `UPDATE tasks SET status = $1, stack_order = $2, updated_at = NOW() WHERE id = $3 AND user_id = $4 RETURNING *`,
+      [newStatus, nextOrder, taskId, req.user.id]
+    );
+
+    await client.query('COMMIT');
+    res.json({ message: 'Tâche passée en active avec succès', task: upRes.rows[0] });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Erreur reprise tâche:', err);
+    res.status(500).json({ error: 'Erreur reprise tâche' });
+  } finally {
+    client.release();
+  }
+});
+
 // Mettre à jour une tâche / action
 app.patch('/api/tasks/:id', authMiddleware, async (req, res) => {
-  const { title, status, elapsedSeconds, resumeNote, requesterOrAssignee, criticality, externalRef, type } = req.body;
+  const { title, status, elapsedSeconds, resumeNote, requesterOrAssignee, criticality, externalRef, type, stackOrder } = req.body;
   try {
     const fields = [];
     const values = [];
@@ -436,6 +515,7 @@ app.patch('/api/tasks/:id', authMiddleware, async (req, res) => {
     if (criticality !== undefined) { fields.push(`criticality = $${idx++}`); values.push(criticality); }
     if (externalRef !== undefined) { fields.push(`external_ref = $${idx++}`); values.push(externalRef.trim()); }
     if (type !== undefined) { fields.push(`type = $${idx++}`); values.push(type); }
+    if (stackOrder !== undefined) { fields.push(`stack_order = $${idx++}`); values.push(stackOrder); }
 
     if (fields.length === 0) return res.json({ message: 'Aucun changement' });
 

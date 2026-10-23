@@ -825,29 +825,37 @@ class InMemoryTaskRepository implements TaskRepository {
   @override
   Future<void> activateDeepWorkTask(String taskId) async {
     final now = DateTime.now();
-    final hasActiveUrgency = _tasks.any(
-        (t) => t.deletedAt == null && t.status == TaskStackStatus.activeTop.dbValue);
+    final activeTasks = _tasks.where((t) =>
+        t.deletedAt == null &&
+        (t.status == TaskStackStatus.activeBase.dbValue ||
+         t.status == TaskStackStatus.activeTop.dbValue)).toList()
+      ..sort((a, b) => a.stackOrder.compareTo(b.stackOrder));
 
-    for (int i = 0; i < _tasks.length; i++) {
-      final t = _tasks[i];
-      if (t.type == TaskType.deepWork.dbValue &&
-          (t.status == TaskStackStatus.activeBase.dbValue ||
-              t.status == TaskStackStatus.pushedPause.dbValue)) {
-        _tasks[i] = t.copyWith(
-          status: TaskStackStatus.backlog.dbValue,
-          stackOrder: 0,
+    // Si 2 tâches sont déjà actives, passer la plus ancienne en sommeil dans la pile
+    if (activeTasks.length >= 2) {
+      final oldestId = activeTasks.first.id;
+      final oldIdx = _tasks.indexWhere((t) => t.id == oldestId);
+      if (oldIdx != -1) {
+        _tasks[oldIdx] = _tasks[oldIdx].copyWith(
+          status: TaskStackStatus.pushedPause.dbValue,
           updatedAt: now,
         );
       }
     }
 
+    int maxOrder = 0;
+    for (final t in activeTasks) {
+      if (t.stackOrder > maxOrder) maxOrder = t.stackOrder;
+    }
+
     final targetIdx = _tasks.indexWhere((t) => t.id == taskId);
     if (targetIdx != -1) {
+      final isFirstActive = activeTasks.isEmpty;
       _tasks[targetIdx] = _tasks[targetIdx].copyWith(
-        status: hasActiveUrgency
-            ? TaskStackStatus.pushedPause.dbValue
-            : TaskStackStatus.activeBase.dbValue,
-        stackOrder: 0,
+        status: isFirstActive
+            ? TaskStackStatus.activeBase.dbValue
+            : TaskStackStatus.activeTop.dbValue,
+        stackOrder: maxOrder + 1,
         updatedAt: now,
       );
     }
@@ -1080,6 +1088,83 @@ class InMemoryTaskRepository implements TaskRepository {
         stackOrder: t.stackOrder,
         elapsedSeconds: t.elapsedSeconds,
         interruptionCount: t.interruptionCount,
+      );
+      _notify();
+    }
+  }
+
+  @override
+  Future<void> pauseActiveTask(String taskId, {String? resumeNote}) async {
+    final now = DateTime.now();
+    final idx = _tasks.indexWhere((t) => t.id == taskId);
+    if (idx != -1) {
+      final t = _tasks[idx];
+      final trimmed = resumeNote?.trim();
+      _tasks[idx] = PrioTask(
+        id: t.id,
+        userId: t.userId,
+        workspaceId: t.workspaceId,
+        visibility: t.visibility,
+        syncStatus: SyncStatus.pending.dbValue,
+        createdAt: t.createdAt,
+        updatedAt: now,
+        deletedAt: t.deletedAt,
+        title: t.title,
+        type: t.type,
+        status: TaskStackStatus.pushedPause.dbValue,
+        criticality: t.criticality,
+        externalRef: t.externalRef,
+        requesterOrAssignee: t.requesterOrAssignee,
+        resumeNote: (trimmed != null && trimmed.isNotEmpty) ? trimmed : t.resumeNote,
+        stackOrder: t.stackOrder,
+        elapsedSeconds: t.elapsedSeconds,
+        interruptionCount: t.interruptionCount,
+      );
+      _notify();
+    }
+  }
+
+  @override
+  Future<void> resumePausedTask(String taskId) async {
+    final now = DateTime.now();
+    final activeTasks = _tasks.where((t) =>
+        t.deletedAt == null &&
+        (t.status == TaskStackStatus.activeBase.dbValue ||
+         t.status == TaskStackStatus.activeTop.dbValue)).toList();
+
+    if (activeTasks.length >= 2) {
+      throw StateError('Limite de 2 tâches actives atteinte');
+    }
+
+    final idx = _tasks.indexWhere((t) => t.id == taskId);
+    if (idx != -1) {
+      final task = _tasks[idx];
+      int maxOrder = 0;
+      for (final t in activeTasks) {
+        if (t.stackOrder > maxOrder) maxOrder = t.stackOrder;
+      }
+      final isBaseDeepWork = task.type == TaskType.deepWork.dbValue && activeTasks.isEmpty;
+      _tasks[idx] = PrioTask(
+        id: task.id,
+        userId: task.userId,
+        workspaceId: task.workspaceId,
+        visibility: task.visibility,
+        syncStatus: SyncStatus.pending.dbValue,
+        createdAt: task.createdAt,
+        updatedAt: now,
+        deletedAt: task.deletedAt,
+        title: task.title,
+        type: task.type,
+        status: isBaseDeepWork
+            ? TaskStackStatus.activeBase.dbValue
+            : TaskStackStatus.activeTop.dbValue,
+        criticality: task.criticality,
+        externalRef: task.externalRef,
+        requesterOrAssignee: task.requesterOrAssignee,
+        resumeNote: task.resumeNote,
+        stackOrder: maxOrder + 1,
+        elapsedSeconds: task.elapsedSeconds,
+        interruptionCount: task.interruptionCount,
       );
       _notify();
     }

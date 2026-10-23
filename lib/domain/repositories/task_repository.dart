@@ -164,6 +164,12 @@ abstract class TaskRepository {
   /// Effacer la note de reprise une fois que l'utilisateur a repris son flux mental
   Future<void> acknowledgeResumeNote(String taskId);
 
+  /// Mettre en sommeil une tâche active (déplacer vers les éléments en pause de la pile)
+  Future<void> pauseActiveTask(String taskId, {String? resumeNote});
+
+  /// Monter une tâche en sommeil vers la Pile Active (dans la limite de 2 tâches actives max)
+  Future<void> resumePausedTask(String taskId);
+
   /// Flux réactif des tâches terminées (Historique / Backlog des éléments déjà faits)
   Stream<List<TaskWithMilestones>> watchCompletedTasks();
 

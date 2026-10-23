@@ -481,6 +481,54 @@ class NeonCloudTaskRepository implements TaskRepository {
   }
 
   @override
+  Future<void> pauseActiveTask(String taskId, {String? resumeNote}) async {
+    final resp = await http.post(
+      Uri.parse('$baseUrl/tasks/$taskId/pause'),
+      headers: _headers,
+      body: jsonEncode({
+        if (resumeNote != null && resumeNote.trim().isNotEmpty)
+          'resumeNote': resumeNote.trim(),
+      }),
+    ).timeout(const Duration(seconds: 10));
+    _notify();
+    if (resp.statusCode >= 400) {
+      // Fallback direct vers PATCH
+      await http.patch(
+        Uri.parse('$baseUrl/tasks/$taskId'),
+        headers: _headers,
+        body: jsonEncode({
+          'status': TaskStackStatus.pushedPause.dbValue,
+          if (resumeNote != null && resumeNote.trim().isNotEmpty)
+            'resumeNote': resumeNote.trim(),
+        }),
+      );
+      _notify();
+    }
+  }
+
+  @override
+  Future<void> resumePausedTask(String taskId) async {
+    final resp = await http.post(
+      Uri.parse('$baseUrl/tasks/$taskId/resume'),
+      headers: _headers,
+    ).timeout(const Duration(seconds: 10));
+    _notify();
+    if (resp.statusCode >= 400) {
+      // Si la limite de 2 tâches actives est atteinte, propager l'erreur
+      if (resp.statusCode == 400) {
+        throw StateError('Limite de 2 tâches actives atteinte');
+      }
+      // Fallback direct vers PATCH
+      await http.patch(
+        Uri.parse('$baseUrl/tasks/$taskId'),
+        headers: _headers,
+        body: jsonEncode({'status': TaskStackStatus.activeTop.dbValue}),
+      );
+      _notify();
+    }
+  }
+
+  @override
   Future<void> completeTask(String taskId) async {
     await http.patch(
       Uri.parse('$baseUrl/tasks/$taskId'),

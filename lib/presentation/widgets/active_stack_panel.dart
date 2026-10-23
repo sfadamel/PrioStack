@@ -324,23 +324,64 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
                   );
                 }
 
-                final topItem = stackItems.first;
-                final pausedItems = stackItems.skip(1).toList();
+                final activeItems = stackItems
+                    .where((t) => t.task.status != TaskStackStatus.pushedPause.dbValue)
+                    .take(2)
+                    .toList();
+                final pausedItems = stackItems
+                    .where((t) => !activeItems.contains(t))
+                    .toList();
 
                 return ListView(
                   padding: EdgeInsets.zero,
                   children: [
-                    // 1. CARTE FOCUS AU SOMMET DE LA PILE
-                    _buildTopActiveCard(
-                      context,
-                      ref,
-                      topItem,
-                      stackItems.length,
-                    ),
+                    // 1. CARTES FOCUS AU SOMMET DE LA PILE (MAX 2 ACTIVES)
+                    if (activeItems.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: AppTheme.surfaceCard.withValues(alpha: 0.65),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppTheme.borderSubtle),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.bedtime_outlined, size: 16, color: AppTheme.neonAmber),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Aucune tâche active (WIP 0/2). Montez une tâche en sommeil ci-dessous ou activez une tâche en réserve.',
+                                style: TextStyle(
+                                  color: AppTheme.textMuted,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      ...activeItems.asMap().entries.map((entry) {
+                        final idx = entry.key;
+                        final active = entry.value;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _buildTopActiveCard(
+                            context,
+                            ref,
+                            active,
+                            stackItems.length,
+                            activeIndex: idx,
+                            totalActive: activeItems.length,
+                          ),
+                        );
+                      }),
 
-                    // 2. CARTES EN SOMMEIL SOUS LE SOMMET (si PUSH actif)
+                    // 2. CARTES EN SOMMEIL SOUS LE SOMMET
                     if (pausedItems.isNotEmpty) ...[
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 4),
                       Padding(
                         padding: const EdgeInsets.only(bottom: 6, left: 2),
                         child: Row(
@@ -363,7 +404,12 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
                       ...pausedItems.map(
                         (paused) => Padding(
                           padding: const EdgeInsets.only(bottom: 10),
-                          child: _buildPausedStackCard(context, ref, paused),
+                          child: _buildPausedStackCard(
+                            context,
+                            ref,
+                            paused,
+                            activeCount: activeItems.length,
+                          ),
                         ),
                       ),
                     ],
@@ -395,6 +441,10 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
     List<TaskWithMilestones> stackItems,
     int reserveCount,
   ) {
+    final activeCount = stackItems
+        .where((t) => t.task.status != TaskStackStatus.pushedPause.dbValue)
+        .take(2)
+        .length;
     final isUrgencyOnTop = stackItems.isNotEmpty &&
         stackItems.first.task.status == TaskStackStatus.activeTop.dbValue;
 
@@ -419,14 +469,20 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
           decoration: BoxDecoration(
-            color: AppTheme.surfaceCard,
+            color: activeCount == 2
+                ? AppTheme.accentBlue.withValues(alpha: 0.15)
+                : AppTheme.surfaceCard,
             borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: AppTheme.borderSubtle),
+            border: Border.all(
+              color: activeCount == 2
+                  ? AppTheme.accentBlue.withValues(alpha: 0.45)
+                  : AppTheme.borderSubtle,
+            ),
           ),
           child: Text(
-            'WIP 1/1',
+            'WIP $activeCount/2',
             style: TextStyle(
-              color: AppTheme.textMuted,
+              color: activeCount == 2 ? AppTheme.accentBlue : AppTheme.textMuted,
               fontSize: 10.5,
               fontWeight: FontWeight.w700,
             ),
@@ -527,8 +583,10 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
     BuildContext context,
     WidgetRef ref,
     TaskWithMilestones item,
-    int stackDepth,
-  ) {
+    int stackDepth, {
+    int activeIndex = 0,
+    int totalActive = 1,
+  }) {
     final task = item.task;
     final isUrgencyTop = task.status == TaskStackStatus.activeTop.dbValue;
     final accent = isUrgencyTop ? AppTheme.neonPink : AppTheme.accentBlue;
@@ -580,8 +638,10 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
                     const SizedBox(width: 7),
                     Text(
                       isUrgencyTop
-                          ? 'INTERRUPTION AU SOMMET'
-                          : 'FOCUS DU JOUR • TÂCHE DE FOND',
+                          ? (totalActive > 1 ? 'INTERRUPTION ACTIVE (#${activeIndex + 1})' : 'INTERRUPTION AU SOMMET')
+                          : (totalActive > 1
+                              ? 'TÂCHE ACTIVE #${activeIndex + 1} • FOND'
+                              : 'FOCUS DU JOUR • TÂCHE DE FOND'),
                       style: TextStyle(
                         color: accent,
                         fontSize: 10.5,
@@ -855,6 +915,38 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
                         },
                       ),
                       const Spacer(),
+                      // Bouton "Mettre en sommeil"
+                      Tooltip(
+                        message: 'Mettre cette tâche en sommeil dans la pile',
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(7),
+                          onTap: () => _showPauseTaskDialog(context, ref, task),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: AppTheme.neonAmber.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(7),
+                              border: Border.all(color: AppTheme.neonAmber.withValues(alpha: 0.35)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.bedtime_outlined, size: 14, color: AppTheme.neonAmber),
+                                SizedBox(width: 4),
+                                Text(
+                                  'En sommeil',
+                                  style: TextStyle(
+                                    color: AppTheme.neonAmber,
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       if (isUrgencyTop)
                         InkWell(
                           borderRadius: BorderRadius.circular(8),
@@ -1190,13 +1282,121 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
     );
   }
 
-  /// Carte compacte d'une tâche mise en sommeil dans la pile suite à un PUSH d'urgence
+  /// Boîte de dialogue permettant de mettre une tâche active en sommeil avec note de reprise optionnelle
+  Future<void> _showPauseTaskDialog(
+    BuildContext context,
+    WidgetRef ref,
+    PrioTask task,
+  ) async {
+    final resumeCtrl = TextEditingController(text: task.resumeNote ?? '');
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: AppTheme.surfaceCard,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.bedtime_outlined, color: AppTheme.neonAmber, size: 20),
+              SizedBox(width: 8),
+              Text(
+                'Mettre en sommeil',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'La tâche "${task.title}" va être déplacée dans les tâches en sommeil.',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 13),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Note de reprise mentale (optionnelle) :',
+                style: TextStyle(color: AppTheme.neonAmber, fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: resumeCtrl,
+                autofocus: true,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: "Où en étiez-vous ? (laisser vide si non nécessaire)",
+                  hintStyle: TextStyle(color: AppTheme.textMuted, fontSize: 12),
+                  filled: true,
+                  fillColor: AppTheme.surfaceInput,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: AppTheme.borderSubtle),
+                  ),
+                ),
+                onSubmitted: (_) async {
+                  Navigator.of(ctx).pop();
+                  await ref.read(focusTimerProvider.notifier).pauseTimer();
+                  await ref.read(taskRepositoryProvider).pauseActiveTask(
+                    task.id,
+                    resumeNote: resumeCtrl.text.trim(),
+                  );
+                  ref.read(appNotificationsProvider.notifier).pushNotification(
+                    title: '🌙 Tâche mise en sommeil : ${task.title}',
+                    body: resumeCtrl.text.trim().isNotEmpty
+                        ? 'Note enregistrée : "${resumeCtrl.text.trim()}"'
+                        : 'La tâche est maintenant en sommeil dans la pile.',
+                    type: AppNotificationType.stackPush,
+                  );
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text('Annuler', style: TextStyle(color: AppTheme.textMuted)),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.neonAmber,
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () async {
+                Navigator.of(ctx).pop();
+                await ref.read(focusTimerProvider.notifier).pauseTimer();
+                await ref.read(taskRepositoryProvider).pauseActiveTask(
+                  task.id,
+                  resumeNote: resumeCtrl.text.trim(),
+                );
+                ref.read(appNotificationsProvider.notifier).pushNotification(
+                  title: '🌙 Tâche mise en sommeil : ${task.title}',
+                  body: resumeCtrl.text.trim().isNotEmpty
+                      ? 'Note enregistrée : "${resumeCtrl.text.trim()}"'
+                      : 'La tâche est maintenant en sommeil dans la pile.',
+                  type: AppNotificationType.stackPush,
+                );
+              },
+              icon: const Icon(Icons.bedtime_outlined, size: 15),
+              label: const Text('Mettre en sommeil', style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Carte compacte d'une tâche mise en sommeil dans la pile
   Widget _buildPausedStackCard(
     BuildContext context,
     WidgetRef ref,
-    TaskWithMilestones pausedItem,
-  ) {
+    TaskWithMilestones pausedItem, {
+    required int activeCount,
+  }) {
     final task = pausedItem.task;
+    final canPromote = activeCount < 2;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -1209,15 +1409,16 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
         children: [
           Row(
             children: [
-              const Icon(Icons.pause_circle_filled_rounded,
+              const Icon(Icons.bedtime_outlined,
                   size: 14, color: AppTheme.neonAmber),
               const SizedBox(width: 6),
               const Text(
-                'EN PAUSE (ATTENTE POP)',
+                'EN SOMMEIL',
                 style: TextStyle(
                   color: AppTheme.neonAmber,
                   fontSize: 10,
                   fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
                 ),
               ),
               const Spacer(),
@@ -1265,6 +1466,85 @@ class _ActiveStackPanelState extends ConsumerState<ActiveStackPanel> {
               ),
             ),
           ],
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Tooltip(
+                message: canPromote
+                    ? 'Monter cette tâche en Active (WIP : $activeCount/2)'
+                    : 'Limite de 2 tâches actives atteinte. Mettez une tâche active en sommeil d\'abord.',
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(7),
+                  onTap: () async {
+                    if (!canPromote) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: const Text(
+                            '⚠️ Limite de 2 tâches actives atteinte. Mettez une tâche active en sommeil pour monter celle-ci.',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                          ),
+                          backgroundColor: AppTheme.surfaceElevated,
+                          duration: const Duration(seconds: 3),
+                        ),
+                      );
+                      return;
+                    }
+                    try {
+                      await ref.read(taskRepositoryProvider).resumePausedTask(task.id);
+                      ref.read(appNotificationsProvider.notifier).pushNotification(
+                        title: '⚡ Tâche passée en Active : ${task.title}',
+                        body: 'La tâche est maintenant active dans la pile.',
+                        type: AppNotificationType.stackPush,
+                      );
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Erreur: $e', style: const TextStyle(color: Colors.white)),
+                            backgroundColor: AppTheme.neonPink,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: canPromote
+                          ? AppTheme.neonGreen.withValues(alpha: 0.14)
+                          : AppTheme.surfaceElevated,
+                      borderRadius: BorderRadius.circular(7),
+                      border: Border.all(
+                        color: canPromote
+                            ? AppTheme.neonGreen.withValues(alpha: 0.45)
+                            : AppTheme.borderSubtle,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.arrow_upward_rounded,
+                          size: 14,
+                          color: canPromote ? AppTheme.neonGreen : AppTheme.textMuted,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Monter en Active',
+                          style: TextStyle(
+                            color: canPromote ? AppTheme.neonGreen : AppTheme.textMuted,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
